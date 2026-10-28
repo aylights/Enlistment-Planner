@@ -1,0 +1,1967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Enlistment Hub</title>
+<meta name="description" content="Plan your class enlistment with friends: pick sections, catch clashes, auto-build schedules and compare timetables.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Caveat:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/canvas-confetti/1.9.3/confetti.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js"></script>
+<style>
+  :root {
+    --bg: #f6f2e9; --dot: rgba(91, 75, 183, .13); --surface: #fffdf8; --surface-2: #faf6ec;
+    --ink: #24203a; --muted: #6b6683; --line: #e4dccb; --line-2: #eee8da;
+    --accent: #5b4bb7; --accent-ink: #ffffff; --stage: #eae7f7; --note: #fff3c9; --rule: #e3dcf2;
+    --hl: linear-gradient(90deg, #d9d2e9, #c9daf8);
+    --ok: #237a5a; --ok-soft: #dcf1e6; --warn: #9a5b0b; --warn-soft: #fdf0d5; --bad: #b4234a; --bad-soft: #fbe2ea;
+    --shadow: 0 1px 0 rgba(36,32,58,.04), 0 10px 26px -12px rgba(54, 42, 120, .22);
+    --display: "Bricolage Grotesque", "Arial Rounded MT Bold", system-ui, sans-serif;
+    --body: "DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --hand: "Caveat", "Comic Sans MS", cursive;
+    --r: 18px; color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --bg: #16151f; --dot: rgba(201, 218, 248, .07); --surface: #211f2d; --surface-2: #1b1a26;
+    --ink: #eeebf7; --muted: #a8a3bd; --line: #353247; --line-2: #2c2a3b;
+    --accent: #a99bf0; --accent-ink: #191630; --stage: #2a2740; --note: #3b3522; --rule: #34314a;
+    --hl: linear-gradient(90deg, #4b3d75, #2e4a82);
+    --ok: #6fd1a6; --ok-soft: #1f3a30; --warn: #f0bf6a; --warn-soft: #3d321c; --bad: #f28aa8; --bad-soft: #43202d;
+    --shadow: 0 10px 26px -12px rgba(0,0,0,.6); color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.5;
+    background-color: var(--bg); background-image: radial-gradient(circle, var(--dot) 1.1px, transparent 1.5px); background-size: 22px 22px;
+    transition: background-color .4s, color .4s;
+  }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 14px max(16px, env(safe-area-inset-right, 0px)) 110px max(16px, env(safe-area-inset-left, 0px)); }
+  .hidden { display: none !important; }
+  button { font: inherit; color: inherit; }
+
+  /* ---------- top bar & tabs ---------- */
+  .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .logo { font-family: var(--display); font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); font-size: 17px; }
+  .logo small { font-family: var(--hand); font-size: 21px; letter-spacing: 0; text-transform: none; color: var(--muted); font-weight: 700; margin-left: 6px; }
+  .seg { display: inline-flex; background: var(--surface); border: 1.5px solid var(--line); border-radius: 999px; padding: 3px; gap: 2px; flex-wrap: wrap; }
+  .seg button { border: none; background: transparent; padding: 7px 14px; border-radius: 999px; font-size: 14px; font-weight: 700; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+  @media (max-width: 600px) { .topbar .seg button { padding: 6px 11px; } }
+  .tabbar { position: sticky; top: 0; z-index: 30; background: var(--bg); padding: 10px 0; margin: 4px 0 6px; border-bottom: 1px solid var(--line); transition: background-color .4s; }
+  .maintabs { display: flex; gap: 4px; background: var(--surface); border: 1.5px solid var(--line); border-radius: 999px; padding: 4px; overflow-x: auto; scrollbar-width: none; }
+  .maintabs::-webkit-scrollbar { display: none; }
+  .maintabs button { flex: 1 0 auto; border: none; background: transparent; padding: 9px 14px; border-radius: 999px; font-size: 15px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: background .2s, color .2s; }
+  .maintabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
+  @media (max-width: 600px) { .maintabs button { padding: 8px 11px; font-size: 14px; } }
+
+  /* ---------- section heads ---------- */
+  .panel { animation: rise .35s ease both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  .rv { animation: rise .45s ease both; animation-delay: var(--d, 0s); }
+  .sec { margin-top: 34px; }
+  .sec-head { margin-bottom: 22px; }
+  .eyebrow { font-family: var(--hand); font-size: 24px; font-weight: 700; color: var(--accent); margin: 0 0 2px; line-height: 1; transform: rotate(-1.5deg); display: inline-block; }
+  .sec h2 { font-family: var(--display); font-weight: 800; font-size: clamp(32px, 5.4vw, 52px); line-height: 1.02; margin: 0; letter-spacing: -.015em; text-wrap: balance; }
+  mark { color: inherit; background: var(--hl); background-repeat: no-repeat; background-size: 100% 42%; background-position: 0 88%; padding: 0 .08em; animation: swipe .9s cubic-bezier(.3,.9,.3,1) .15s both; }
+  @keyframes swipe { from { background-size: 0 42%; } }
+  .sub { color: var(--muted); margin: 10px 0 0; max-width: 62ch; font-size: 17px; }
+
+  /* ---------- hero ---------- */
+  .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: center; margin-top: 26px; }
+  @media (max-width: 860px) { .hero { grid-template-columns: 1fr; } }
+  .hero h1 { font-family: var(--display); font-weight: 800; font-size: clamp(40px, 7vw, 74px); line-height: .98; margin: 6px 0 14px; letter-spacing: -.025em; text-wrap: balance; }
+  .hero h1 .pill { display: inline-block; background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 0 .3em .06em; transform: rotate(-3deg); }
+  .hero .lede { color: var(--muted); margin: 0 0 20px; max-width: 46ch; font-size: 18px; }
+  .facts { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .facts li { border: 1.5px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 13px; font-size: 14px; font-weight: 500; }
+  .hero-vis { position: relative; padding: 26px 20px 18px; }
+  .hero-vis .cap { font-family: var(--hand); font-size: 22px; color: var(--muted); text-align: center; margin: 8px 0 0; }
+
+  /* ---------- paper bits ---------- */
+  .stagebg { background: var(--stage); border-radius: 28px; transition: background .4s; }
+  .card { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 20px; box-shadow: var(--shadow); min-width: 0; }
+  .tape::before { content: ""; position: absolute; top: -11px; left: 26px; width: 88px; height: 22px; transform: rotate(-4deg); border-radius: 2px; opacity: .85;
+    background: repeating-linear-gradient(45deg, #d9d2e9 0 7px, #c9daf8 7px 14px); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .tape.right::before { left: auto; right: 26px; transform: rotate(5deg); background: repeating-linear-gradient(-45deg, #c8ece5 0 7px, #f5d3e4 7px 14px); }
+  .note-hand { font-family: var(--hand); font-size: 21px; color: var(--muted); line-height: 1.1; }
+  .sticky { background: var(--note); border-radius: 4px 4px 14px 4px; padding: 10px 16px; transform: rotate(-.6deg); box-shadow: var(--shadow); }
+
+  /* ---------- steps (setup) ---------- */
+  .steps { display: grid; gap: 22px; }
+  .step-head { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; }
+  .num { flex: none; width: 36px; height: 36px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-family: var(--display); font-weight: 800; font-size: 18px; }
+  .step-head h3 { font-family: var(--display); font-size: 23px; margin: 0; line-height: 1.15; }
+  .step-head h3 small { display: block; font-family: var(--body); font-weight: 400; font-size: 14px; color: var(--muted); }
+
+  label.field { display: block; font-size: 13px; font-weight: 700; color: var(--muted); margin: 14px 0 6px; letter-spacing: .02em; }
+  input[type=text], select, textarea { width: 100%; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 12px; font: inherit; font-size: 15px; color: var(--ink); background: var(--surface); outline: none; transition: border .15s, box-shadow .15s; }
+  input[type=text]:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+  textarea { min-height: 110px; resize: vertical; }
+  textarea.ruled { line-height: 30px; padding: 10px 14px; background-image: linear-gradient(transparent 29px, var(--rule) 29px); background-size: 100% 30px; background-position: 0 10px; background-attachment: local; font-weight: 500; min-height: 202px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 600px) { .grid2 { grid-template-columns: 1fr; } }
+
+  .btn { border: none; border-radius: 999px; padding: 11px 20px; font-weight: 700; font-size: 15px; cursor: pointer; background: var(--accent); color: var(--accent-ink); transition: transform .1s, filter .15s; white-space: nowrap; }
+  .btn:hover { filter: brightness(1.07); } .btn:active { transform: scale(.97); }
+  .btn.small { padding: 8px 14px; font-size: 14px; }
+  .btn.ghost { background: transparent; color: var(--ink); border: 1.5px solid var(--line); }
+  .btn.ghost:hover { border-color: var(--muted); }
+  .btn.soft { background: var(--stage); color: var(--ink); }
+  .btn.danger { background: var(--bad-soft); color: var(--bad); }
+  .btn.link { background: none; color: var(--accent); padding: 6px 4px; text-decoration: underline; text-underline-offset: 3px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+  .hint { font-size: 14px; background: var(--surface-2); border-radius: 12px; padding: 10px 14px; margin: 10px 0 0; color: var(--muted); }
+  .status { font-size: 14px; font-weight: 700; color: var(--ok); margin-top: 10px; }
+  .status.err { color: var(--bad); }
+  details > summary { cursor: pointer; font-weight: 700; color: var(--accent); font-size: 14px; margin-top: 14px; }
+
+  .drop { display: grid; place-items: center; text-align: center; gap: 2px; padding: 24px 16px; margin-top: 12px; border: 2px dashed var(--line); border-radius: 16px; cursor: pointer; transition: border-color .2s, background .2s; }
+  .drop:hover, .drop.drag { border-color: var(--accent); background: var(--surface-2); }
+  .drop .big { font-size: 28px; }
+  .drop small { color: var(--muted); }
+  .drop input, .filelink input { display: none; }
+  .urlrow { display: flex; gap: 8px; margin-top: 12px; }
+  .urlrow input { flex: 1; min-width: 0; border-radius: 999px; }
+
+  /* people cards */
+  .person { position: relative; border: 1.5px solid var(--line); border-radius: 16px; padding: 14px 16px 14px 20px; margin-bottom: 14px; background: var(--surface); }
+  .person::after { content: ""; position: absolute; left: -1.5px; top: 14px; bottom: 14px; width: 5px; border-radius: 0 4px 4px 0; background: var(--c); }
+  .person-top { display: flex; gap: 10px; align-items: center; }
+  .person-top input { flex: 1; min-width: 0; font-weight: 700; font-size: 17px; }
+  .avatar-btn { border: none; background: none; padding: 0; cursor: pointer; position: relative; }
+  .avatar-btn::after { content: "✎"; position: absolute; right: -4px; bottom: -4px; font-size: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 50%; width: 16px; height: 16px; display: grid; place-items: center; }
+  .tag { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: var(--cs); color: var(--cd); white-space: nowrap; }
+  .filelink { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; font-weight: 700; color: var(--accent); cursor: pointer; }
+  .filelink:hover { text-decoration: underline; }
+  .ipsline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .ipsline select { width: auto; padding: 4px 8px; font-size: 13px; }
+  .person-actions { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+  .chiplist { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .bchip { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 700; padding: 4px 4px 4px 11px; border-radius: 999px; border: 1.5px dashed var(--c); background: var(--surface-2); }
+  .bchip button { border: none; background: none; cursor: pointer; color: var(--muted); padding: 0 6px; font-size: 13px; }
+
+  .crest { display: inline-grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--cs); color: var(--cd); border: 2px solid var(--c); font-family: var(--display); font-weight: 800; font-size: 14px; line-height: 1; }
+  .crest.emo { font-size: 17px; }
+  .crest.sm { width: 22px; height: 22px; font-size: 11px; border-width: 1.5px; }
+  .crest.sm.emo { font-size: 12px; }
+  .crest.lg { width: 44px; height: 44px; font-size: 19px; }
+  .crest.lg.emo { font-size: 24px; }
+  .icon-btn { border: none; background: none; cursor: pointer; padding: 6px 8px; border-radius: 8px; color: var(--muted); font-size: 15px; }
+  .icon-btn:hover { background: var(--surface-2); color: var(--ink); }
+  .emoji-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-top: 12px; }
+  .emoji-grid button { font-size: 24px; border: 1.5px solid var(--line); background: var(--surface); border-radius: 12px; padding: 6px 0; cursor: pointer; }
+  .emoji-grid button:hover { border-color: var(--accent); transform: translateY(-2px); }
+
+  .daychips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .daychip { border: 1.5px solid var(--line); background: transparent; padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .daychip[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+
+  .classlist { margin-top: 10px; max-height: 360px; overflow: auto; border: 1px solid var(--line-2); border-radius: 12px; }
+  .classlist .ci { display: flex; gap: 6px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--line-2); font-size: 14px; }
+  .classlist .ci:first-child { border-top: none; }
+  .classlist .ci .t { flex: 1; min-width: 0; }
+  .classlist .ci .t span { color: var(--muted); font-size: 13px; }
+
+  /* ---------- who bar ---------- */
+  .whobar { position: sticky; top: 70px; z-index: 20; background: var(--bg); padding: 8px 0 10px; margin-bottom: 12px; transition: background-color .4s; }
+  .whochips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .who { display: inline-flex; align-items: center; gap: 8px; padding: 4px 14px 4px 4px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--surface); font-size: 15px; font-weight: 700; cursor: pointer; transition: all .15s; }
+  .who .ct { font-size: 12px; color: var(--muted); font-weight: 500; }
+  .who[aria-pressed="true"] { background: var(--cs); border-color: var(--c); color: var(--cd); box-shadow: 0 4px 14px -6px var(--c); }
+  .who[aria-pressed="true"] .ct { color: var(--cd); }
+  .who.off { opacity: .45; }
+  .who.add { padding: 8px 14px; border-style: dashed; color: var(--accent); }
+  #weekDays button { padding: 6px 11px; font-size: 13px; }
+  @media (max-width: 600px) { #weekDays button { padding: 5px 8px; } }
+
+  /* ---------- studio ---------- */
+  .studio { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: 24px; align-items: start; }
+  @media (max-width: 900px) { .studio { grid-template-columns: 1fr; } }
+  .stage { padding: 18px; position: sticky; top: 140px; max-height: calc(100vh - 160px); overflow: auto; scrollbar-width: thin; }
+  @media (max-width: 900px) { .stage { position: static; max-height: none; } }
+  .stage-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .stage-title { font-family: var(--display); font-weight: 800; font-size: 23px; line-height: 1.1; }
+  .stage-sub { font-size: 14px; color: var(--muted); }
+  .stats { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .stat { background: var(--surface); border-radius: 12px; padding: 8px 12px; min-width: 76px; }
+  .stat b { display: block; font-family: var(--display); font-size: 22px; line-height: 1; }
+  .stat span { font-size: 12px; color: var(--muted); }
+  .alerts { display: grid; gap: 8px; margin-top: 12px; }
+  .alert { background: var(--surface); border-radius: 12px; padding: 10px 12px; font-size: 13px; border-left: 4px solid var(--warn); }
+  .alert.bad { border-left-color: var(--bad); }
+  .alert b { display: block; font-size: 14px; margin-bottom: 4px; }
+  .alert .row { margin-top: 6px; }
+  .drafts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 12px; font-size: 13px; color: var(--muted); }
+  .dchip { display: inline-flex; align-items: center; border-radius: 999px; background: var(--note); font-weight: 700; color: var(--ink); }
+  .dchip button { border: none; background: none; cursor: pointer; padding: 4px 6px 4px 11px; font-size: 13px; font-weight: 700; }
+  .dchip button + button { padding: 4px 9px 4px 2px; color: var(--muted); }
+
+  /* mini week */
+  .mini { position: relative; display: grid; grid-template-columns: 22px repeat(6, 1fr); gap: 3px; }
+  .mini .dh { font-size: 11px; font-weight: 700; text-align: center; color: var(--muted); }
+  .mini .col { position: relative; background: var(--surface); border-radius: 8px; height: var(--h, 260px);
+    background-image: linear-gradient(var(--line-2) 1px, transparent 1px); background-size: 100% calc(var(--h, 260px) / 7); }
+  .mini .axis { position: relative; height: var(--h, 260px); font-size: 9px; color: var(--muted); }
+  .mini .axis span { position: absolute; right: 2px; transform: translateY(-50%); }
+  .mini .b { position: absolute; left: 3px; right: 3px; border-radius: 5px; background: var(--cs); border: 1.5px solid var(--c); color: var(--cd); font-size: 9px; font-weight: 700; padding: 1px 3px; overflow: hidden; line-height: 1.15; white-space: nowrap; text-overflow: ellipsis; }
+  .mini .b.clash { border-color: var(--bad); box-shadow: 0 0 0 1.5px var(--bad); }
+  .mini .b.busy, .blk.busy { background: repeating-linear-gradient(45deg, var(--cs) 0 5px, transparent 5px 10px); border-style: dashed; }
+  .mini.deco .b { animation: pop .5s cubic-bezier(.3,1.5,.6,1) both; animation-delay: var(--d, 0s); }
+  @keyframes pop { from { transform: scale(.4); opacity: 0; } }
+
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+  .toolbar input { flex: 1; min-width: 160px; border-radius: 999px; }
+
+  .subj { margin-bottom: 20px; }
+  .subj-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .subj-head h4 { font-family: var(--display); font-weight: 800; font-size: 21px; margin: 0; }
+  .needers { display: inline-flex; gap: 3px; align-items: center; font-size: 12px; color: var(--muted); }
+  .pillst { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; }
+  .st-ready { background: var(--ok-soft); color: var(--ok); }
+  .st-conflict { background: var(--bad-soft); color: var(--bad); }
+  .st-missing { background: var(--warn-soft); color: var(--warn); }
+  .secs { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+  .sec-card { position: relative; text-align: left; border: 2px solid var(--line); background: var(--surface); border-radius: 14px; padding: 12px 14px; cursor: pointer; display: grid; gap: 4px; align-content: start; transition: border-color .15s, background .15s, transform .15s; }
+  .sec-card:hover { border-color: var(--muted); transform: translateY(-2px); }
+  .sec-card[aria-pressed="true"] { border-color: var(--c); background: var(--cs); color: var(--cd); }
+  .sec-card .top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+  .sec-card .nm { font-family: var(--display); font-weight: 800; font-size: 20px; line-height: 1.1; }
+  .sec-card .nm .st { color: #d6a21c; font-size: 16px; margin-left: 4px; }
+  .sec-card .chk { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-size: 13px; font-weight: 800; flex: none; }
+  .sec-card[aria-pressed="true"] .chk { background: var(--c); border-color: var(--c); color: white; animation: stamp .3s cubic-bezier(.3,1.6,.6,1); }
+  @keyframes stamp { from { transform: scale(.3) rotate(-30deg); } }
+  .sec-card .when { font-weight: 700; font-size: 14px; }
+  .sec-card .meta { font-size: 13px; color: var(--muted); }
+  .sec-card[aria-pressed="true"] .meta { color: inherit; opacity: .8; }
+  .cardnote { font-family: var(--hand); font-size: 18px; line-height: 1.1; background: var(--note); color: var(--ink); border-radius: 4px 4px 10px 4px; padding: 3px 8px; margin-top: 4px; justify-self: start; transform: rotate(-.8deg); }
+  .withs { display: flex; gap: 3px; align-items: center; font-size: 12px; color: var(--muted); margin-top: 2px; flex-wrap: wrap; }
+  .flag { display: inline-block; font-size: 12px; font-weight: 700; border-radius: 8px; padding: 2px 8px; margin-top: 4px; justify-self: start; }
+  .flag.warn { background: var(--warn-soft); color: var(--warn); }
+  .flag.bad { background: var(--bad-soft); color: var(--bad); }
+  .flag.plan { background: var(--note); color: var(--ink); font-family: var(--hand); font-size: 18px; padding: 0 9px; margin: 0; transform: rotate(-3deg); }
+  .cardfoot { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+  .bk { border: none; background: none; padding: 2px 0; font-size: 13px; font-weight: 700; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+  .sec-card[aria-pressed="true"] .bk { color: inherit; }
+  .flash { animation: flash 1.4s ease; }
+  @keyframes flash { 0%, 60% { box-shadow: 0 0 0 4px var(--accent); } 100% { box-shadow: none; } }
+
+  /* ---------- build ---------- */
+  .prefs { display: grid; gap: 14px; }
+  .pref-label { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+  .toggles { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tgl { border: 1.5px solid var(--line); background: transparent; padding: 7px 13px; border-radius: 999px; font-size: 14px; font-weight: 700; cursor: pointer; }
+  .tgl[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+  .options { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 16px; margin-top: 18px; }
+  .opt { display: grid; gap: 10px; align-content: start; }
+  .opt .rank { font-family: var(--hand); font-size: 24px; color: var(--accent); line-height: 1; }
+  .opt ul { margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--muted); display: grid; gap: 2px; }
+  .opt ul b { color: var(--ink); }
+  .opt details summary { margin-top: 0; font-size: 13px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line-2); }
+  .chip.good { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+
+  /* ---------- week ---------- */
+  .tl { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; overflow-x: auto; box-shadow: var(--shadow); }
+  .tl-head { display: flex; min-width: 600px; padding: 10px 0; border-bottom: 1px solid var(--line-2); font-family: var(--display); font-weight: 800; font-size: 14px; text-align: center; }
+  .tl-body { display: flex; position: relative; min-width: 600px; }
+  .tl.one .tl-head, .tl.one .tl-body { min-width: 0; }
+  .tl-axis { width: 50px; flex: none; position: relative; border-right: 1px solid var(--line-2); }
+  .tl-axis span { position: absolute; right: 6px; transform: translateY(-50%); font-size: 11px; font-weight: 700; color: var(--muted); }
+  .tl-col { flex: 1; position: relative; border-right: 1px dashed var(--line-2); cursor: cell; background-image: linear-gradient(var(--line-2) 1px, transparent 1px); background-size: 100% 44px; }
+  .tl-col:last-child { border-right: none; }
+  .blk { position: absolute; border-radius: 9px; padding: 4px 6px; font-size: 11px; font-weight: 700; overflow: hidden; cursor: pointer; line-height: 1.2; white-space: nowrap; text-overflow: ellipsis;
+         background: var(--cs); color: var(--cd); border: 1.5px solid var(--c); transition: transform .12s; }
+  .blk:hover { transform: scale(1.03); z-index: 5; }
+  .blk.clash { box-shadow: 0 0 0 2px var(--bad); }
+  .blk.busy { pointer-events: none; }
+  .blk .s { font-weight: 500; opacity: .85; }
+  .tl.one .blk { font-size: 13px; padding: 6px 9px; white-space: normal; }
+  .slotmark { position: absolute; left: 0; right: 0; height: 2px; background: var(--accent); pointer-events: none; z-index: 4; }
+  .slotmark::before { content: ""; position: absolute; left: -4px; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+  .wstats { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 16px; margin-top: 18px; }
+  .hbars { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; align-items: end; margin: 14px 0 10px; }
+  .hbars div { display: grid; gap: 3px; justify-items: center; align-self: end; font-size: 11px; color: var(--muted); font-weight: 700; }
+  .hbars i { display: block; width: 100%; max-width: 30px; border-radius: 6px 6px 3px 3px; background: var(--c); min-height: 3px; transition: height .5s cubic-bezier(.3,1.4,.6,1); }
+  .hbars i.zero { background: var(--line-2); }
+
+  /* ---------- compare & checklist ---------- */
+  .cols2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 20px; align-items: start; }
+  .card h3 { font-family: var(--display); font-weight: 800; font-size: 22px; margin: 0; }
+  .card .sub2 { color: var(--muted); font-size: 14px; margin: 4px 0 10px; }
+  .item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 0; border-top: 1px solid var(--line-2); flex-wrap: wrap; }
+  .item:first-of-type { border-top: none; }
+  .item .t { font-weight: 700; }
+  .item .m { font-size: 13px; color: var(--muted); }
+  .wherelist { display: grid; gap: 3px; font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .wherelist span { display: inline-flex; gap: 6px; align-items: center; }
+  .freeday { display: flex; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line-2); align-items: baseline; }
+  .freeday:first-of-type { border-top: none; }
+  .freeday b { width: 40px; flex: none; font-family: var(--display); }
+  .freechip { display: inline-block; background: var(--note); font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 999px; margin: 2px 4px 2px 0; }
+
+  .prog-top { display: flex; align-items: center; gap: 12px; }
+  .prog-top .nm { font-family: var(--display); font-weight: 800; font-size: 24px; flex: 1; }
+  .prog-top .pnum { font-family: var(--display); font-weight: 800; font-size: 26px; color: var(--c); }
+  .bar { height: 12px; background: var(--line-2); border-radius: 999px; overflow: hidden; margin: 12px 0 4px; }
+  .bar i { display: block; height: 100%; border-radius: 999px; background: var(--c); transition: width .6s cubic-bezier(.3,1.4,.6,1); }
+  .ck { display: grid; grid-template-columns: 26px 1fr; gap: 2px 10px; padding: 11px 0; border-top: 1px solid var(--line-2); }
+  .ck:first-of-type { border-top: none; }
+  .ck .ic { font-weight: 800; text-align: center; font-size: 16px; }
+  .ck .t { font-weight: 700; cursor: pointer; }
+  .ck .t:hover { text-decoration: underline; }
+  .ck .plans { grid-column: 2; display: grid; gap: 1px; font-size: 13px; color: var(--muted); }
+  .ck .plans b { color: var(--ink); font-family: var(--hand); font-size: 19px; font-weight: 700; margin-right: 6px; }
+
+  .empty { text-align: center; padding: 44px 20px; }
+  .empty .big { font-size: 40px; display: block; margin-bottom: 6px; }
+  .empty h3 { font-family: var(--display); font-size: 24px; margin: 0 0 6px; }
+  .empty p { color: var(--muted); margin: 0 auto; max-width: 46ch; }
+
+  /* ---------- toast & modal ---------- */
+  .toast { position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(30px); background: var(--ink); color: var(--surface); padding: 10px 12px 10px 18px; border-radius: 999px; font-size: 14px; font-weight: 700; opacity: 0; transition: all .3s; z-index: 300; pointer-events: none; display: flex; gap: 12px; align-items: center; width: max-content; max-width: calc(100vw - 32px); }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+  .toast button { background: var(--surface); color: var(--ink); border: none; border-radius: 999px; padding: 5px 12px; font-weight: 700; cursor: pointer; flex: none; }
+  .toast span { padding-right: 6px; }
+  .modal { position: fixed; inset: 0; z-index: 200; background: rgba(20, 16, 40, .45); display: grid; place-items: center; padding: 16px; animation: fade .2s ease; }
+  @keyframes fade { from { opacity: 0; } }
+  .modal .card { width: min(480px, 100%); animation: rise .25s ease; max-height: 90vh; overflow: auto; }
+  .modal h3 { margin: 0 0 6px; }
+  .modal p { margin: 0 0 4px; color: var(--muted); }
+  .choice-list { display: grid; gap: 8px; margin-top: 12px; }
+  .choice { text-align: left; display: flex; gap: 10px; align-items: center; border: 2px solid var(--line); background: var(--surface); border-radius: 14px; padding: 10px 12px; cursor: pointer; font-weight: 700; }
+  .choice:hover { border-color: var(--accent); }
+  .qr { display: grid; place-items: center; background: #fff; border-radius: 16px; padding: 12px; margin-top: 12px; }
+  .qr svg { width: 100%; max-width: 280px; height: auto; display: block; }
+
+  .foot { text-align: center; margin-top: 50px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="topbar">
+    <span class="logo">Enlistment Hub <small>plan it together ✎</small></span>
+    <div class="seg" role="group" aria-label="Theme">
+      <button data-theme-set="light" aria-pressed="true">☀ day</button>
+      <button data-theme-set="dark" aria-pressed="false">☾ night</button>
+    </div>
+  </header>
+
+  <nav class="tabbar">
+    <div class="maintabs" role="tablist" aria-label="Sections">
+      <button role="tab" data-tab="setup" aria-selected="true">Setup</button>
+      <button role="tab" data-tab="pick" aria-selected="false">Pick</button>
+      <button role="tab" data-tab="build" aria-selected="false">Auto-build</button>
+      <button role="tab" data-tab="week" aria-selected="false">Week</button>
+      <button role="tab" data-tab="compare" aria-selected="false">Compare</button>
+      <button role="tab" data-tab="check" aria-selected="false">Checklist</button>
+    </div>
+  </nav>
+
+  <!-- ======================= SETUP ======================= -->
+  <main class="panel" id="panel-setup">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">enlistment season, sorted</p>
+        <h1>Plan your sched <span class="pill">together</span></h1>
+        <p class="lede">Load the class offerings and your IPS, pick sections without clashes, and line up classes with up to three friends. Everything stays on your device.</p>
+        <ul class="facts">
+          <li>✎ clash alerts</li><li>✨ auto-build</li><li>👯 up to 4 people</li><li>🔗 share links</li><li>🔒 no sign-up</li>
+        </ul>
+      </div>
+      <div class="hero-vis stagebg">
+        <div class="mini deco" id="heroMini"></div>
+        <p class="cap">your week, but make it organized</p>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="steps">
+        <div class="card tape rv" style="--d:.05s">
+          <div class="step-head"><span class="num">1</span><h3>Who's planning?<small>Start with yourself. Add friends whenever you want to compare (up to four people).</small></h3></div>
+          <div id="peopleList"></div>
+          <div class="row" style="margin-top:0">
+            <button class="btn small ghost" data-act="add-person" id="addPersonBtn">+ add a friend</button>
+            <button class="btn small ghost" data-act="open-import">🔗 add a friend's share code</button>
+          </div>
+          <div class="grid2" style="margin-top:6px">
+            <div>
+              <label class="field">Semester (for IPS files)</label>
+              <select id="semPick">
+                <option value="auto">auto, from the schedule sheet's name</option>
+                <option value="SEM_1">1st semester</option>
+                <option value="SEM_2">2nd semester</option>
+              </select>
+            </div>
+          </div>
+          <details>
+            <summary>IPS file cell ranges</summary>
+            <p class="hint">Where the subject codes sit in the "Potential IPS" sheet. Left and right are the two programs side by side.</p>
+            <div class="grid2">
+              <div><label class="field">1st sem · left</label><input type="text" data-range="SEM_1.L"></div>
+              <div><label class="field">1st sem · right</label><input type="text" data-range="SEM_1.R"></div>
+              <div><label class="field">2nd sem · left</label><input type="text" data-range="SEM_2.L"></div>
+              <div><label class="field">2nd sem · right</label><input type="text" data-range="SEM_2.R"></div>
+            </div>
+          </details>
+        </div>
+
+        <div class="card tape right rv" style="--d:.12s">
+          <div class="step-head"><span class="num">2</span><h3>Class offerings<small>The sections being offered this term. Upload the sheet, load it from a Google Sheets link, paste rows, or type them in.</small></h3></div>
+          <div class="seg" role="group" data-seg="add">
+            <button data-pane="upload" aria-pressed="true">⬆ upload / link</button>
+            <button data-pane="paste" aria-pressed="false">📋 paste</button>
+            <button data-pane="type" aria-pressed="false">✎ type</button>
+          </div>
+
+          <div data-pane-of="add" data-pane="upload">
+            <label class="drop" id="schedDrop">
+              <span class="big">🗂️</span>
+              <b>Tap to choose, or drop a file here</b>
+              <small>.xlsx or .csv · in Google Sheets: File → Download → Microsoft Excel</small>
+              <input type="file" id="schedFile" accept=".xlsx,.xls,.csv">
+            </label>
+            <div class="urlrow">
+              <input type="text" id="sheetUrl" placeholder="…or paste a Google Sheets link">
+              <button class="btn small" data-act="load-url">load</button>
+            </div>
+            <div id="urlRefresh"></div>
+            <div id="sheetPickWrap" class="hidden">
+              <label class="field">Which sheet has the schedules?</label>
+              <select id="sheetPick"></select>
+            </div>
+          </div>
+
+          <div data-pane-of="add" data-pane="paste" class="hidden">
+            <label class="field">Paste rows copied from Google Sheets</label>
+            <textarea id="pasteBox" placeholder="Subject · Section · Day · Time · Room · Instructor · Pair subject&#10;(checkbox columns at the front are fine too)"></textarea>
+            <div class="row">
+              <button class="btn small" data-act="paste-add">add these rows</button>
+              <button class="btn small ghost" data-act="paste-replace">replace all classes</button>
+            </div>
+          </div>
+
+          <div data-pane-of="add" data-pane="type" class="hidden">
+            <div class="grid2">
+              <div><label class="field">Subject</label><input type="text" id="fSubject" list="dlSubjects" placeholder="MATH 21"></div>
+              <div><label class="field">Section</label><input type="text" id="fSection" placeholder="A"></div>
+            </div>
+            <label class="field">Days · tap or type</label>
+            <input type="text" id="fDays" placeholder="Monday, Thursday">
+            <div class="daychips" id="dayChips"></div>
+            <div class="grid2">
+              <div><label class="field">Time (24-hour)</label><input type="text" id="fTime" placeholder="0800-0930"></div>
+              <div><label class="field">Room</label><input type="text" id="fRoom"></div>
+              <div><label class="field">Instructor</label><input type="text" id="fInstructor"></div>
+              <div><label class="field">Pair subject · optional, e.g. a lab</label><input type="text" id="fPair" list="dlPairs"></div>
+            </div>
+            <p class="hint">Different times on different days? Separate both with commas: <b>Monday, Thursday</b> and <b>0730-0900, 1300-1430</b>.</p>
+            <div class="row">
+              <button class="btn small" data-act="form-save" id="formSave">add class</button>
+              <button class="btn small ghost hidden" data-act="form-cancel" id="formCancel">cancel edit</button>
+            </div>
+            <datalist id="dlSubjects"></datalist>
+            <datalist id="dlPairs"></datalist>
+          </div>
+
+          <div class="status" id="schedStatus"></div>
+          <details id="classDetails">
+            <summary id="classSummary">view &amp; edit classes</summary>
+            <input type="text" id="classSearch" placeholder="🔎 search classes or profs" style="margin-top:10px; border-radius:999px">
+            <div class="classlist" id="classList"></div>
+          </details>
+        </div>
+
+        <div class="card rv" style="--d:.19s">
+          <div class="step-head"><span class="num">3</span><h3>Keep it safe<small>Everything is saved in this browser only. Export to take your picks back to Google Sheets.</small></h3></div>
+          <div class="row" style="margin-top:0">
+            <button class="btn small" data-act="export">export .xlsx</button>
+            <button class="btn small ghost" data-act="clear-picks">clear all picks</button>
+            <button class="btn small danger" data-act="reset">start fresh</button>
+          </div>
+        </div>
+
+        <button class="btn" data-go="pick" style="justify-self:start; padding:14px 26px; font-size:16px">Start picking classes →</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- ======================= PICK ======================= -->
+  <main class="panel hidden" id="panel-pick">
+    <section class="sec">
+      <div class="sec-head">
+        <p class="eyebrow">the fun part</p>
+        <h2>Pick your <mark>sections</mark></h2>
+        <p class="sub">Choose whose plan you're editing, then tap a section to add it. You'll see clashes before you commit. Star favorites, jot notes, and mark backups as Plan B and C.</p>
+      </div>
+      <div class="whobar"><div class="whochips" id="pickWho"></div></div>
+      <div class="studio">
+        <aside class="stage stagebg" id="pickStage"></aside>
+        <div>
+          <div class="toolbar">
+            <div class="seg" role="group" id="pickFilter">
+              <button data-f="need" aria-pressed="true">their subjects</button>
+              <button data-f="all" aria-pressed="false">all</button>
+              <button data-f="picked" aria-pressed="false">picked</button>
+              <button data-f="starred" aria-pressed="false">★</button>
+            </div>
+            <input type="text" id="search" placeholder="🔎 subject, section, prof">
+          </div>
+          <div id="pickList"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ======================= BUILD ======================= -->
+  <main class="panel hidden" id="panel-build">
+    <section class="sec">
+      <div class="sec-head">
+        <p class="eyebrow">let the notebook do the math</p>
+        <h2>Auto-<mark>build</mark> a schedule</h2>
+        <p class="sub">It tries every combination of sections for the IPS subjects and shows the clash-free ones. Build for one person, or for friends together so you share as many classes as possible.</p>
+      </div>
+      <div class="whobar" id="buildWhoBar"><div class="whochips" id="buildWho"></div></div>
+      <div class="studio">
+        <aside class="card stage" id="buildPrefs"></aside>
+        <div id="buildResults"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ======================= WEEK ======================= -->
+  <main class="panel hidden" id="panel-week">
+    <section class="sec">
+      <div class="sec-head">
+        <p class="eyebrow">the big picture</p>
+        <h2>The whole <mark>week</mark></h2>
+        <p class="sub">Each person gets their own lane, with busy times shaded. Tap a name to show or hide them, tap a day to zoom in, and tap an empty spot to see which sections meet then.</p>
+      </div>
+      <div class="whobar">
+        <div class="whochips" id="weekWho"></div>
+        <div class="row" style="margin-top:8px">
+          <div class="seg" role="group" id="weekDays"></div>
+          <button class="btn small ghost" data-act="save-image-week">📸 save as image</button>
+        </div>
+      </div>
+      <div id="weekGrid"></div>
+      <div id="slotPanel"></div>
+      <div class="wstats" id="weekStats"></div>
+    </section>
+  </main>
+
+  <!-- ======================= COMPARE ======================= -->
+  <main class="panel hidden" id="panel-compare">
+    <section class="sec">
+      <div class="sec-head">
+        <p class="eyebrow">besties who enlist together…</p>
+        <h2>Compare &amp; <mark>match up</mark></h2>
+        <p class="sub">See which classes you share, line up the ones you could take together, and find free time for lunch or study sessions.</p>
+      </div>
+      <div id="compareBody"></div>
+    </section>
+  </main>
+
+  <!-- ======================= CHECKLIST ======================= -->
+  <main class="panel hidden" id="panel-check">
+    <section class="sec">
+      <div class="sec-head">
+        <p class="eyebrow">enlistment day cheat sheet</p>
+        <h2>Your <mark>checklist</mark></h2>
+        <p class="sub">Every IPS subject with its Plan A, B and C, so you know exactly what to grab if a section fills up.</p>
+      </div>
+      <div class="cols2" id="checkBody"></div>
+    </section>
+  </main>
+
+  <div class="foot note-hand">✎ everything stays in this browser · made for enlistment season</div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="modal hidden" id="modal"><div class="card tape" id="modalCard"></div></div>
+
+<script>
+/* ======================= config ======================= */
+const CONFIG = {
+  IPS_SHEET_NAME: 'Potential IPS',
+  RANGES: { SEM_1: { L: 'A10:A15', R: 'E10:E15' }, SEM_2: { L: 'A18:A25', R: 'E18:E24' } },
+  DAY_START: 7, DAY_END: 21, HOUR_PX: 44, MAX_PEOPLE: 4, BUILD_CAP: 4000,
+  WALK_MIN: 15,              // back-to-back classes in different buildings with less than this many minutes → warning
+  LUNCH: [660, 840, 45]      // a 45-minute break somewhere between 11:00 and 14:00
+};
+const COLORS = [
+  { hue: 'lilac', c: '#7c5cc4', cs: '#d9d2e9', cd: '#4b3d75' },
+  { hue: 'sky',   c: '#3b6fd1', cs: '#c9daf8', cd: '#2e4a82' },
+  { hue: 'mint',  c: '#1f9a8a', cs: '#c8ece5', cd: '#1d5e57' },
+  { hue: 'rose',  c: '#c2417f', cs: '#f5d3e4', cd: '#86204f' }
+];
+const EMOJIS = ['🐸','☕','🌙','🌸','🍓','🐱','🐶','🦋','🍵','🎧','📚','🌷','⭐','🍀','🐻','🐰','🦊','🐧','🍑','🫧','🎀','🌻','🍪','🌈','🐢','🐼','🍰','🧋','🎨','🪴'];
+const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/* ======================= helpers ======================= */
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm = s => String(s ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+const isTrue = v => v === true || String(v).trim().toUpperCase() === 'TRUE';
+const isBool = v => v === true || v === false || /^(true|false)$/i.test(String(v ?? '').trim());
+const lines = s => s.split('\n').map(x => x.trim()).filter(Boolean);
+const uniq = a => [...new Set(a)];
+const clone = o => JSON.parse(JSON.stringify(o));
+const trunc = (s, n) => s.length > n ? s.slice(0, n - 1) + '…' : s;
+const people = () => state.people;
+const nP = () => state.people.length;
+const N = i => (state.people[i] && state.people[i].name) || (i === 0 ? 'You' : `Friend ${i}`);
+const poss = i => N(i) === 'You' ? 'your' : `${N(i)}'s`;
+const rowLabel = r => `${r.subject} ${r.section}`.trim();
+const keyOf = r => norm(rowLabel(r));
+const profKey = r => norm(r.instructor);
+const profPref = r => profKey(r) ? state.profs[profKey(r)] : undefined;
+const hex = h => [1, 3, 5].map(k => parseInt(h.slice(k, k + 2), 16));
+const toHex = a => '#' + a.map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
+const mix = list => toHex([0, 1, 2].map(k => list.reduce((s, h) => s + hex(h)[k], 0) / list.length));
+/* CSS vars for one person, or a blend for several (lilac + sky → the original combined color) */
+function pv(ids) {
+  ids = [].concat(ids);
+  if (ids.length === 1) { const K = COLORS[ids[0]]; return `--c:${K.c};--cs:${K.cs};--cd:${K.cd}`; }
+  return `--c:${mix(ids.map(i => COLORS[i].c))};--cs:${mix(ids.map(i => COLORS[i].cs))};--cd:${mix(ids.map(i => COLORS[i].cd))}`;
+}
+function crest(i, cls = '') {
+  const e = state.people[i] && state.people[i].emoji;
+  return `<span class="crest ${cls}${e ? ' emo' : ''}" style="${pv(i)}" title="${esc(N(i))}">${esc(e || N(i)[0].toUpperCase())}</span>`;
+}
+
+/* ======================= state ======================= */
+const STORE = 'enlistmentHub.v4';
+const newPerson = () => ({ name: '', emoji: '', reqs: [], ipsAoa: null, ipsName: '', side: 'L', backups: {}, stars: [], busy: [], drafts: [] });
+const BUILD_DEFAULTS = { noSat: false, earliest: 7, latest: 0, keep: false, sort: 'days', maxHours: 0, maxRow: 0, freeDay: false, lunch: false, skipAvoid: true, mode: 'solo', together: [0, 1, 2, 3] };
+function freshState() {
+  return { people: [newPerson()], rows: [], sheetName: '', sheetUrl: '', sem: 'auto', ranges: clone(CONFIG.RANGES), active: 0,
+           weekShow: [true, true, true, true], weekDay: null, pickFilter: 'need', theme: null, notes: {}, profs: {}, build: clone(BUILD_DEFAULTS) };
+}
+const isOldSample = rows => (rows || []).some(r => r.instructor === 'REYES, Ana') && (rows || []).some(r => r.instructor === 'FLORES, Nico');
+function migrate() {
+  try {
+    const v3 = JSON.parse(localStorage.getItem('enlistmentHub.v3'));
+    if (v3 && v3.rows && !isOldSample(v3.rows)) {
+      const s = freshState();
+      s.people = (v3.people || [newPerson()]).map(p => ({ ...newPerson(), ...p, backups: {} }));
+      s.rows = v3.rows; s.sheetName = v3.sheetName || ''; s.sem = v3.sem || 'auto';
+      if (v3.ranges) s.ranges = v3.ranges;
+      return s;
+    }
+    const v2 = JSON.parse(localStorage.getItem('enlistmentHub.v2'));
+    if (v2 && v2.rows) {
+      const s = freshState();
+      s.people = [{ ...newPerson(), name: v2.names?.p1 || '', reqs: v2.reqs?.p1 || [] }];
+      if (v2.names?.p2 || (v2.reqs?.p2 || []).length || v2.rows.some(r => r.p2)) s.people.push({ ...newPerson(), name: v2.names?.p2 || '', reqs: v2.reqs?.p2 || [] });
+      s.rows = v2.rows.map(r => ({ subject: r.subject, section: r.section, days: r.days, time: r.time, room: r.room, instructor: r.instructor, pair: r.pair, on: [!!r.p1, !!r.p2, false, false] }));
+      s.sheetName = v2.sheetName || ''; s.sem = v2.sem || 'auto';
+      return s;
+    }
+  } catch (e) {}
+  return null;
+}
+function load() {
+  try { const v = JSON.parse(localStorage.getItem(STORE)); if (v) return v; } catch (e) {}
+  return migrate();
+}
+function save() { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} }
+function normalizeState() {
+  const f = freshState();
+  for (const k in f) if (state[k] === undefined) state[k] = f[k];
+  state.build = Object.assign(clone(BUILD_DEFAULTS), state.build || {});
+  state.people = state.people.map(p => Object.assign(newPerson(), p));
+}
+let state = Object.assign(freshState(), load() || {});
+normalizeState();
+let schedWb = null, view = 'setup', editIndex = -1, lastComplete = null, slot = null, buildShown = 12;
+
+/* ======================= toast, modal, undo ======================= */
+let toastTimer;
+function toast(msg, action) {
+  const t = $('#toast');
+  t.innerHTML = `<span>${esc(msg)}</span>${action ? `<button id="toastAct">${esc(action.label)}</button>` : ''}`;
+  if (action) $('#toastAct').onclick = () => { t.classList.remove('show'); action.fn(); };
+  t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), action ? 6000 : 2800);
+}
+const snapshot = () => JSON.stringify(state);
+function undoable(msg, snap) {
+  toast(msg, { label: 'undo', fn: () => { state = JSON.parse(snap); normalizeState(); lastComplete = null; save(); syncSetup(); render(); toast('undone'); } });
+}
+/* openModal resolves to null (dismissed) or { choice, ...fields } where fields come from [data-field] inputs */
+let modalResolve = null;
+function openModal(html) {
+  if (modalResolve) { const r = modalResolve; modalResolve = null; r(null); }
+  $('#modalCard').innerHTML = html;
+  $('#modal').classList.remove('hidden');
+  setTimeout(() => { const f = $('#modal [autofocus]'); if (f) f.focus(); }, 50);
+  return new Promise(res => { modalResolve = res; });
+}
+function closeModal(val) {
+  const fields = {};
+  $$('#modal [data-field]').forEach(el => fields[el.dataset.field] = el.value);
+  $('#modal').classList.add('hidden');
+  if (modalResolve) { const r = modalResolve; modalResolve = null; r(val === null ? null : { choice: val, ...fields }); }
+}
+$('#modal').addEventListener('click', e => {
+  if (e.target.id === 'modal') return closeModal(null);
+  const set = e.target.closest('[data-mset]');
+  if (set) { // single-choice toggle group inside a modal
+    const g = set.dataset.mset;
+    $$(`#modal [data-mset="${g}"]`).forEach(b => b.setAttribute('aria-pressed', b === set));
+    $(`#modal [data-field="${g}"]`).value = set.dataset.v;
+    return;
+  }
+  const multi = e.target.closest('[data-mmulti]');
+  if (multi) { // multi-choice toggle group
+    multi.setAttribute('aria-pressed', multi.getAttribute('aria-pressed') !== 'true');
+    const g = multi.dataset.mmulti;
+    $(`#modal [data-field="${g}"]`).value = [...$$(`#modal [data-mmulti="${g}"][aria-pressed="true"]`)].map(b => b.dataset.v).join(',');
+    return;
+  }
+  const b = e.target.closest('[data-choice]'); if (b) closeModal(b.dataset.choice);
+});
+function ask(title, body, ok = 'yes', danger = false) {
+  return openModal(`<h3>${esc(title)}</h3><p>${body}</p><div class="row"><button class="btn small ${danger ? 'danger' : ''}" data-choice="ok">${esc(ok)}</button><button class="btn small ghost" data-choice="">cancel</button></div>`).then(v => !!v && v.choice === 'ok');
+}
+function celebrate(i) {
+  if (typeof confetti !== 'function') return;
+  confetti({ particleCount: 140, spread: 85, origin: { y: .75 }, colors: [COLORS[i].c, COLORS[i].cs, '#c9daf8', '#d9d2e9', '#fff3c9'] });
+}
+
+/* ======================= theme ======================= */
+function applyTheme() {
+  const t = state.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  document.documentElement.dataset.theme = t;
+  $$('[data-theme-set]').forEach(b => b.setAttribute('aria-pressed', b.dataset.themeSet === t));
+}
+
+/* ======================= reading sheets ======================= */
+function sheetToAoa(ws) {
+  if (!ws || !ws['!ref']) return [];
+  const ref = XLSX.utils.decode_range(ws['!ref']);
+  ref.s = { r: 0, c: 0 };
+  return XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '', range: ref, blankrows: true });
+}
+function readFile(file) {
+  return new Promise((resolve, reject) => {
+    const csv = /\.csv$/i.test(file.name), fr = new FileReader();
+    fr.onload = e => { try { resolve(csv ? XLSX.read(e.target.result, { type: 'string' }) : XLSX.read(new Uint8Array(e.target.result), { type: 'array' })); } catch (err) { reject(err); } };
+    fr.onerror = reject;
+    csv ? fr.readAsText(file) : fr.readAsArrayBuffer(file);
+  });
+}
+function findIpsSheet(wb) {
+  const t = norm(CONFIG.IPS_SHEET_NAME);
+  return wb.SheetNames.find(n => norm(n) === t) || wb.SheetNames.find(n => norm(n).includes('ips'));
+}
+function parseScheduleSheet(aoa) {
+  let col = null, selCols = [];
+  for (let r = 0; r < Math.min(aoa.length, 60) && !col; r++) {
+    const row = aoa[r].map(norm), si = row.indexOf('subject');
+    if (si < 0) continue;
+    const find = (...names) => row.findIndex(c => names.includes(c));
+    col = { subject: si, section: find('section'), days: find('day', 'days'), time: find('time'), room: find('room'),
+            instructor: find('instructor', 'professor', 'faculty'), pair: find('pair subject', 'pair') };
+    selCols = row.map((c, k) => (c === 'select' && k < si) ? k : -1).filter(k => k >= 0);
+    if (!selCols.length && si > 0 && si <= 4) selCols = [...Array(si).keys()];
+  }
+  if (!col) {
+    let n = 0;
+    aoa.forEach(row => { let k = 0; while (k < 4 && k < row.length && isBool(row[k])) k++; n = Math.max(n, k); });
+    col = { subject: n, section: n + 1, days: n + 2, time: n + 3, room: n + 4, instructor: n + 5, pair: n + 7 };
+    selCols = [...Array(n).keys()];
+    if (aoa.every(row => row.length <= n + 7)) col.pair = n + 6;
+  }
+  selCols = selCols.slice(0, CONFIG.MAX_PEOPLE);
+  const get = (row, i) => (i >= 0 && i < row.length) ? String(row[i] ?? '').trim() : '';
+  const rows = [];
+  aoa.forEach(row => {
+    const subject = get(row, col.subject);
+    if (!subject || norm(subject) === 'subject') return;
+    const r = { subject, section: get(row, col.section), days: get(row, col.days), time: get(row, col.time),
+                room: get(row, col.room), instructor: get(row, col.instructor), pair: get(row, col.pair),
+                on: [0, 1, 2, 3].map(p => p < selCols.length && isTrue(row[selCols[p]])) };
+    if (!r.section && !r.days && !r.time) return;
+    if (r.pair.startsWith('⚠')) r.pair = '';
+    rows.push(r);
+  });
+  return rows;
+}
+function parsePasted(text) {
+  const aoa = text.replace(/\r/g, '').split('\n').filter(l => l.trim())
+    .map(l => (l.includes('\t') ? l.split('\t') : l.split(/\s{2,}/)).map(c => c.trim()));
+  return parseScheduleSheet(aoa);
+}
+function extractRange(aoa, a1) {
+  if (!aoa || !a1) return [];
+  let r; try { r = XLSX.utils.decode_range(a1.trim()); } catch (e) { return []; }
+  const out = [];
+  for (let R = r.s.r; R <= r.e.r; R++) for (let K = r.s.c; K <= r.e.c; K++) { const v = String((aoa[R] || [])[K] ?? '').trim(); if (v) out.push(v); }
+  return out;
+}
+function semKey() {
+  if (state.sem !== 'auto') return state.sem;
+  const n = norm(state.sheetName);
+  return (n.includes('second') || n.includes('2nd') || n.includes('sem 2') || n.includes('sem2')) ? 'SEM_2' : 'SEM_1';
+}
+function refreshReqs() { people().forEach(p => { if (p.ipsAoa) p.reqs = extractRange(p.ipsAoa, state.ranges[semKey()][p.side]); }); }
+function ensurePeopleFor(rows) {
+  let need = 1;
+  rows.forEach(r => r.on.forEach((v, p) => { if (v) need = Math.max(need, p + 1); }));
+  while (nP() < Math.min(need, CONFIG.MAX_PEOPLE)) state.people.push(newPerson());
+}
+/* When new offerings replace old ones, keep everyone's picks for sections that still exist (unless the file has its own ticks) */
+function carryPicks(oldRows, newRows) {
+  if (newRows.some(r => r.on.some(Boolean))) return;
+  const m = new Map(oldRows.map(r => [keyOf(r), r.on]));
+  newRows.forEach(r => { const o = m.get(keyOf(r)); if (o) r.on = [...o]; });
+}
+
+/* ======================= time ======================= */
+function parseDays(dayStr) {
+  if (!dayStr) return [];
+  const s = dayStr.toString().toLowerCase();
+  if (s.includes('daily')) return [0, 1, 2, 3, 4];
+  return ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'].map((d, i) => s.includes(d) ? i : -1).filter(i => i >= 0);
+}
+function parseTime(timeStr) {
+  if (!timeStr) return null;
+  const s = timeStr.toString().split(',')[0].trim();
+  let start = NaN, end = NaN;
+  const h = s.split(/[-–—]/);
+  if (h.length === 2) { start = parseInt(h[0].replace(/[^0-9]/g, '')); end = parseInt(h[1].replace(/[^0-9]/g, '')); }
+  if (isNaN(start) || isNaN(end)) {
+    const d = s.replace(/[^0-9]/g, '');
+    if (d.length === 8) { start = +d.slice(0, 4); end = +d.slice(4); }
+    else if (d.length === 7) { start = +d.slice(0, 3); end = +d.slice(3); }
+    else if (d.length === 6) { start = +d.slice(0, 3); end = +d.slice(3); }
+    else return null;
+  }
+  if (start < 700) start += 1200;
+  if (end < start) end += 1200;
+  return { start, end };
+}
+const toMin = t => Math.floor(t / 100) * 60 + (t % 100);
+function parseScheduleData(dayStr, timeStr) {
+  if (!dayStr || !timeStr) return [];
+  const dp = dayStr.toString().split(',').map(s => s.trim()).filter(Boolean);
+  const tp = timeStr.toString().split(',').map(s => s.trim()).filter(Boolean);
+  const out = [];
+  if (dp.length > 1 && dp.length === tp.length) dp.forEach((d, i) => out.push({ days: parseDays(d), time: parseTime(tp[i]) }));
+  else out.push({ days: parseDays(dayStr), time: parseTime(tp[0] || timeStr) });
+  return out.filter(s => s.days.length && s.time).map(s => ({ ...s, s: toMin(s.time.start), e: toMin(s.time.end) }));
+}
+const hm = m => { const h = Math.floor(m / 60), mm = m % 60; return `${((h + 11) % 12) + 1}${mm ? ':' + String(mm).padStart(2, '0') : ''}`; };
+const ap = m => Math.floor(m / 60) >= 12 ? 'pm' : 'am';
+const fmtRange = (s, e) => ap(s) === ap(e) ? `${hm(s)}–${hm(e)}${ap(e)}` : `${hm(s)}${ap(s)}–${hm(e)}${ap(e)}`;
+const fmtT = m => `${hm(m)}${ap(m)}`;
+const fmtHrs = m => { const h = Math.round(m / 6) / 10; return `${h}h`; };
+function whenText(parsed, r) {
+  if (!parsed.length) return `${r.days} ${r.time}`.trim();
+  return parsed.map(p => `${p.days.map(d => DAY_SHORT[d]).join('/')} ${fmtRange(p.s, p.e)}`).join(' · ');
+}
+const busyText = b => `${b.days.map(d => DAY_SHORT[d]).join('/')} ${fmtRange(b.s, b.e)}`;
+
+/* ======================= core ======================= */
+let C = null;
+function compute() {
+  const n = nP();
+  const parsed = state.rows.map(r => parseScheduleData(r.days, r.time));
+  const ov = (i, j) => parsed[i].some(a => parsed[j].some(b => a.days.some(d => b.days.includes(d)) && a.s < b.e && a.e > b.s));
+  const bov = (i, b) => parsed[i].some(a => a.days.some(d => b.days.includes(d)) && a.s < b.e && a.e > b.s);
+  const picks = [...Array(n)].map((_, p) => state.rows.map((r, i) => r.on[p] ? i : -1).filter(i => i >= 0));
+  const conf = state.rows.map((r, i) => [...Array(n)].map((_, p) => uniq([
+    ...picks[p].filter(j => j !== i && ov(i, j)).map(j => state.rows[j].subject),
+    ...people()[p].busy.filter(b => bov(i, b)).map(b => b.label || 'busy time')])));
+  const byKey = new Map(); state.rows.forEach((r, i) => { if (!byKey.has(keyOf(r))) byKey.set(keyOf(r), i); });
+  return { parsed, ov, bov, picks, conf, byKey };
+}
+function pairIndex(i) {
+  const pair = norm(state.rows[i].pair);
+  if (!pair) return -1;
+  const k = C ? C.byKey.get(pair) : state.rows.findIndex(r => keyOf(r) === pair);
+  return (k === undefined || k < 0 || k === i) ? -1 : k;
+}
+function statusOf(p, subject) {
+  const mine = C.picks[p].filter(j => norm(state.rows[j].subject) === norm(subject));
+  if (!mine.length) return { st: 'missing', rows: [] };
+  return { st: mine.some(j => !C.conf[j][p].length) ? 'ready' : 'conflict', rows: mine };
+}
+function progressOf(p) {
+  const reqs = uniq(people()[p].reqs.map(norm));
+  return { req: reqs.length, done: reqs.filter(s => statusOf(p, s).st === 'ready').length };
+}
+/* what would clash if person p took row i (ignoring the section it would replace) */
+function clashPreview(i, p) {
+  const pk = pairIndex(i), check = pk >= 0 ? [i, pk] : [i];
+  const skip = new Set(check.map(x => norm(state.rows[x].subject)));
+  return uniq([
+    ...C.picks[p].filter(j => !skip.has(norm(state.rows[j].subject)) && check.some(x => C.ov(x, j))).map(j => state.rows[j].subject),
+    ...people()[p].busy.filter(b => check.some(x => C.bov(x, b))).map(b => b.label || 'busy time')]);
+}
+function setPick(i, p, val, msgs) {
+  const r = state.rows[i];
+  if (!!r.on[p] === val) return;
+  r.on[p] = val;
+  if (val) {
+    removeBackup(p, i);
+    state.rows.forEach((o, k) => { if (k !== i && o.on[p] && norm(o.subject) === norm(r.subject)) { setPick(k, p, false, msgs); msgs.push(`switched ${r.subject} to ${r.section}`); } });
+  }
+  const pk = pairIndex(i);
+  if (pk >= 0 && !!state.rows[pk].on[p] !== val) { setPick(pk, p, val, msgs); if (val) msgs.push(`added its pair ${rowLabel(state.rows[pk])}`); }
+}
+function togglePick(i, p) {
+  const msgs = [], val = !state.rows[i].on[p];
+  setPick(i, p, val, msgs);
+  save(); render();
+  toast(msgs.length ? `${N(p)}: ${uniq(msgs).join(' · ')}` : `${val ? 'added' : 'removed'} ${rowLabel(state.rows[i])}${val ? ` for ${N(p)}` : ''}`);
+}
+/* Plan B / C backups and stars, stored as "subject section" keys so they survive edits */
+function backupList(p, subj) { return (people()[p].backups[norm(subj)] || []).filter(k => C.byKey.has(k)); }
+function removeBackup(p, i) {
+  const b = people()[p].backups, s = norm(state.rows[i].subject), k = keyOf(state.rows[i]);
+  if (b[s]) b[s] = b[s].filter(x => x !== k);
+}
+function toggleBackup(i, p) {
+  const r = state.rows[i], s = norm(r.subject), k = keyOf(r), b = people()[p].backups;
+  const list = backupList(p, r.subject);
+  if (list.includes(k)) { b[s] = list.filter(x => x !== k); toast(`removed ${rowLabel(r)} as a backup`); }
+  else if (r.on[p]) return toast(`${rowLabel(r)} is already ${poss(p)} Plan A`);
+  else if (list.length >= 2) return toast('Plan B and C are full. Remove one first.');
+  else { b[s] = [...list, k]; toast(`${rowLabel(r)} is now ${poss(p)} Plan ${'BC'[list.length]}`); }
+  save(); render();
+}
+const isStar = (i, p) => people()[p].stars.includes(keyOf(state.rows[i]));
+function toggleStar(i, p) {
+  const k = keyOf(state.rows[i]), list = people()[p].stars;
+  people()[p].stars = list.includes(k) ? list.filter(x => x !== k) : [...list, k];
+  save(); render();
+}
+const favOf = (i, p) => (isStar(i, p) ? 2 : 0) + (profPref(state.rows[i]) === 'prefer' ? 1 : 0);
+
+/* ======================= day analysis (breaks, walking, lunch) ======================= */
+const bld = room => { const m = String(room || '').toUpperCase().trim().match(/^[A-Z]+/); return m && !['TBA', 'TBD', 'ONLINE', 'OL'].includes(m[0]) ? m[0] : null; };
+function dayLists(set) {
+  const days = DAY_SHORT.map(() => []);
+  set.forEach(i => C.parsed[i].forEach(ps => ps.days.forEach(d => days[d].push({ s: ps.s, e: ps.e, i }))));
+  days.forEach(l => l.sort((a, b) => a.s - b.s));
+  return days;
+}
+function hopsOf(days) {
+  const out = [];
+  days.forEach((l, d) => { for (let k = 1; k < l.length; k++) {
+    const a = l[k - 1], b = l[k], gap = b.s - a.e;
+    if (gap >= 0 && gap < CONFIG.WALK_MIN) { const x = bld(state.rows[a.i].room), y = bld(state.rows[b.i].room); if (x && y && x !== y) out.push({ d, a: a.i, b: b.i, gap, x, y }); }
+  } });
+  return out;
+}
+function noLunchDays(days, busy) {
+  const [W0, W1, need] = CONFIG.LUNCH;
+  return days.map((l, d) => {
+    if (!l.length) return -1;
+    const iv = [...l.map(x => [x.s, x.e]), ...busy.filter(b => b.days.includes(d)).map(b => [b.s, b.e])].filter(([s, e]) => s < W1 && e > W0).sort((a, b) => a[0] - b[0]);
+    if (!iv.length) return -1;
+    let t = W0;
+    for (const [s, e] of iv) { if (s - t >= need) return -1; t = Math.max(t, e); }
+    return W1 - t >= need ? -1 : d;
+  }).filter(d => d >= 0);
+}
+function fixesFor(p) {
+  const clashing = C.picks[p].filter(i => C.conf[i][p].length);
+  const fixes = [], seen = new Set();
+  clashing.forEach(i => {
+    const s = norm(state.rows[i].subject); if (seen.has(s)) return; seen.add(s);
+    const alts = state.rows.map((r, j) => j).filter(j => j !== i && norm(state.rows[j].subject) === s && !clashPreview(j, p).length && !(state.build.skipAvoid && profPref(state.rows[j]) === 'avoid'));
+    alts.sort((a, b) => favOf(b, p) - favOf(a, p));
+    if (alts.length) fixes.push({ from: i, to: alts[0] });
+  });
+  return { clashing: clashing.length, fixes };
+}
+
+/* ======================= mini week ======================= */
+function miniWeek(blocks, h = 260) {
+  const S = CONFIG.DAY_START, E = CONFIG.DAY_END, span = (E - S) * 60;
+  const cols = DAY_SHORT.map(() => []);
+  blocks.forEach((b, n) => cols[b.day].push(`<div class="b${b.clash ? ' clash' : ''}${b.busy ? ' busy' : ''}" style="${b.style}; top:${(b.s - S * 60) / span * 100}%; height:${Math.max((b.e - b.s) / span * 100, 4)}%;${b.lanes > 1 ? ` left:${2 + b.lane * (96 / b.lanes)}%; right:auto; width:${96 / b.lanes - 3}%;` : ''} --d:${(n * .04).toFixed(2)}s">${esc(b.label || '')}</div>`));
+  let axis = '';
+  for (let t = S + 2; t < E; t += 2) axis += `<span style="top:${(t - S) / (E - S) * 100}%">${((t + 11) % 12) + 1}</span>`;
+  return `<div></div>${['M', 'T', 'W', 'Th', 'F', 'Sa'].map(d => `<div class="dh">${d}</div>`).join('')}
+    <div class="axis" style="--h:${h}px">${axis}</div>${cols.map(c => `<div class="col" style="--h:${h}px">${c.join('')}</div>`).join('')}`;
+}
+function blocksFor(p, rowIdx, opts = {}) {
+  const out = [];
+  rowIdx.forEach(i => C.parsed[i].forEach(ps => ps.days.forEach(d => out.push({ day: d, s: ps.s, e: ps.e, style: pv(p), label: opts.noLabel ? '' : state.rows[i].subject, clash: opts.clash !== false && C.conf[i][p] && C.conf[i][p].length, lane: opts.lane, lanes: opts.lanes }))));
+  if (opts.busy !== false) people()[p].busy.forEach(b => b.days.forEach(d => out.push({ day: d, s: b.s, e: b.e, style: pv(p), label: opts.noLabel ? '' : b.label, busy: true, lane: opts.lane, lanes: opts.lanes })));
+  return out;
+}
+
+/* ======================= render ======================= */
+function render() {
+  if (state.active >= nP()) state.active = 0;
+  C = compute();
+  checkCelebrate();
+  if (view === 'setup') renderHeroMini();
+  if (view === 'pick') renderPick();
+  if (view === 'build') renderBuild();
+  if (view === 'week') renderWeek();
+  if (view === 'compare') renderCompare();
+  if (view === 'check') renderCheck();
+}
+function checkCelebrate() {
+  const now = people().map((_, p) => { const pr = progressOf(p); return pr.req > 0 && pr.done === pr.req; });
+  if (lastComplete && lastComplete.length === now.length) now.forEach((v, p) => { if (v && !lastComplete[p]) { celebrate(p); toast(`✦ ${N(p)} has every subject covered!`); } });
+  lastComplete = now;
+}
+const emptyBox = (icon, title, text, btns = '') => `<div class="card empty rv"><span class="big">${icon}</span><h3>${title}</h3><p>${text}</p>${btns ? `<div class="row" style="justify-content:center">${btns}</div>` : ''}</div>`;
+const noClasses = () => emptyBox('🗂️', 'No classes yet', 'Add the class offerings in Setup first. Upload the sheet, paste a link or rows, or type them in.', `<button class="btn small" data-go="setup">go to Setup</button>`);
+
+function whoChips(el, mode) {
+  let html = people().map((_, i) => {
+    const on = mode === 'week' ? state.weekShow[i] : state.active === i;
+    const ct = state.rows.filter(r => r.on[i]).length;
+    return `<button class="who ${mode === 'week' && !on ? 'off' : ''}" style="${pv(i)}" data-act="who" data-mode="${mode}" data-i="${i}" aria-pressed="${on}">${crest(i, 'sm')}${esc(N(i))}<span class="ct">${ct}</span></button>`;
+  }).join('');
+  if (mode !== 'week' && nP() < CONFIG.MAX_PEOPLE) html += `<button class="who add" data-act="add-person-go">+ friend</button>`;
+  if (mode !== 'week' && nP() === 1) html += `<span class="note-hand" style="font-size:19px">← add a friend to compare</span>`;
+  el.innerHTML = html;
+}
+
+/* ----- setup ----- */
+function renderPeople() {
+  $('#peopleList').innerHTML = people().map((p, i) => `
+    <div class="person" style="${pv(i)}">
+      <div class="person-top"><button class="avatar-btn" data-act="emoji" data-i="${i}" title="pick an emoji">${crest(i)}</button><input type="text" class="pname" data-i="${i}" maxlength="18" placeholder="${i === 0 ? 'Your name' : 'Friend\'s name'}" value="${esc(p.name)}">
+        <span class="tag">${COLORS[i].hue}</span>${nP() > 1 ? `<button class="icon-btn" data-act="remove-person" data-i="${i}" title="remove" aria-label="remove ${esc(N(i))}">✕</button>` : ''}</div>
+      <label class="field">IPS subjects this semester · one per line</label>
+      <textarea class="ruled preqs" data-i="${i}" placeholder="MATH 21&#10;ENG 12&#10;FILI 13&#10;…">${esc(p.reqs.join('\n'))}</textarea>
+      ${p.ipsAoa ? `<div class="ipsline">📜 from ${esc(p.ipsName)} · <select data-side="${i}"><option value="L" ${p.side === 'L' ? 'selected' : ''}>left program</option><option value="R" ${p.side === 'R' ? 'selected' : ''}>right program</option></select></div>` : ''}
+      <label class="field">Busy times · org meetings, work, commute</label>
+      <div class="chiplist">${p.busy.map((b, k) => `<span class="bchip">${esc(b.label)} · ${esc(busyText(b))}<button data-act="del-busy" data-i="${i}" data-b="${k}" aria-label="remove">✕</button></span>`).join('')}
+        <button class="btn small ghost" data-act="add-busy" data-i="${i}">+ busy time</button></div>
+      <div class="person-actions">
+        <label class="filelink">📜 ${p.ipsAoa ? 'use a different IPS file' : 'import subjects from an IPS file'}<input type="file" data-ips="${i}" accept=".xlsx,.xls,.csv"></label>
+        <button class="btn link" data-act="share" data-i="${i}">🔗 share this plan</button>
+      </div>
+    </div>`).join('');
+  $('#addPersonBtn').classList.toggle('hidden', nP() >= CONFIG.MAX_PEOPLE);
+}
+function renderClassList() {
+  const q = norm($('#classSearch').value);
+  $('#classSummary').textContent = `view & edit classes (${state.rows.length})`;
+  $('#classDetails').classList.toggle('hidden', !state.rows.length);
+  $('#classList').innerHTML = state.rows.map((r, i) => ({ r, i })).filter(({ r }) => !q || norm([r.subject, r.section, r.instructor, r.days, r.room].join(' ')).includes(q))
+    .map(({ r, i }) => `<div class="ci"><div class="t"><b>${esc(rowLabel(r))}</b> <span>· ${esc(r.days)} ${esc(r.time)}${r.room ? ' · ' + esc(r.room) : ''}${r.instructor ? ' · ' + esc(r.instructor) : ''}${profPref(r) === 'prefer' ? ' 👍' : profPref(r) === 'avoid' ? ' 👎' : ''}</span></div>
+      <button class="icon-btn" data-act="note" data-i="${i}" title="notes">📝</button><button class="icon-btn" data-act="edit" data-i="${i}" title="edit">✎</button><button class="icon-btn" data-act="del" data-i="${i}" title="delete">✕</button></div>`).join('') || '<div class="ci"><span class="t" style="color:var(--muted)">no matches</span></div>';
+}
+function syncSetup() {
+  renderPeople(); renderClassList();
+  $('#semPick').value = state.sem;
+  $$('[data-range]').forEach(inp => { const [s, k] = inp.dataset.range.split('.'); inp.value = state.ranges[s][k]; });
+  setStatus(state.rows.length ? `✓ ${state.rows.length} sections ready${state.sheetName ? ` from "${state.sheetName}"` : ''}` : '');
+  $('#urlRefresh').innerHTML = state.sheetUrl ? `<div class="row"><button class="btn small soft" data-act="refresh-url">↻ refresh from your Google Sheet</button><span class="note-hand" style="font-size:18px">keeps everyone's picks</span></div>` : '';
+  $('#dlSubjects').innerHTML = uniq(state.rows.map(r => r.subject)).map(s => `<option value="${esc(s)}">`).join('');
+  $('#dlPairs').innerHTML = state.rows.map(r => `<option value="${esc(rowLabel(r))}">`).join('');
+  syncDayChips();
+}
+function renderHeroMini() {
+  const mine = C.picks.flatMap((list, p) => blocksFor(p, list, { noLabel: true, clash: false, busy: false }));
+  const deco = mine.length ? mine : [[0, 480, 570, 0], [3, 480, 570, 0], [1, 600, 690, 1], [4, 600, 690, 1], [2, 780, 960, 2], [0, 840, 930, 3], [3, 840, 930, 3], [5, 480, 660, 0], [1, 900, 990, 2], [4, 900, 990, 2], [2, 540, 720, 1]]
+    .map(([day, s, e, p]) => ({ day, s, e, style: pv(p), label: '' }));
+  $('#heroMini').innerHTML = miniWeek(deco, 220);
+}
+function setStatus(msg, err) { const el = $('#schedStatus'); el.textContent = msg; el.classList.toggle('err', !!err); }
+
+/* ----- pick ----- */
+function renderPick() {
+  whoChips($('#pickWho'), 'pick');
+  const a = state.active, stage = $('#pickStage'), list = $('#pickList'), P = people()[a];
+  const reqs = uniq(P.reqs);
+  const pr = progressOf(a), fx = fixesFor(a);
+  const days = dayLists(C.picks[a]), hops = hopsOf(days), noLunch = noLunchDays(days, P.busy);
+  let alerts = '';
+  if (fx.clashing) alerts += `<div class="alert bad"><b>⚠ ${fx.clashing} section${fx.clashing > 1 ? 's' : ''} clashing</b>${fx.fixes.length ? 'Quick fix' + (fx.fixes.length > 1 ? 'es (any one may do it)' : '') + ':' : 'No single swap fixes it.'}
+    <div class="row">${fx.fixes.map(f => `<button class="btn small" data-act="fix" data-from="${f.from}" data-to="${f.to}">move ${esc(state.rows[f.from].subject)} → ${esc(state.rows[f.to].section)}</button>`).join('')}${fx.fixes.length ? '' : '<button class="btn small soft" data-go="build">try Auto-build</button>'}</div></div>`;
+  if (hops.length) alerts += `<div class="alert"><b>🚶 Tight walk${hops.length > 1 ? 's' : ''}</b>${hops.map(h => `${DAY_SHORT[h.d]}: ${esc(state.rows[h.a].subject)} (${esc(h.x)}) → ${esc(state.rows[h.b].subject)} (${esc(h.y)}) with ${h.gap ? h.gap + ' min' : 'no time'} to walk`).join('<br>')}</div>`;
+  if (noLunch.length) alerts += `<div class="alert"><b>🍱 No lunch break</b>No free ${CONFIG.LUNCH[2]} minutes between 11am and 2pm on ${noLunch.map(d => DAY_SHORT[d]).join(', ')}.</div>`;
+  stage.innerHTML = `<div class="stage-head"><div><div class="stage-title">${N(a) === 'You' ? 'Your' : esc(N(a)) + '\'s'} week</div><div class="stage-sub">${C.picks[a].length ? 'live preview · shaded = busy times' : 'picks show up here as you tap'}</div></div>${crest(a, 'lg')}</div>
+    <div class="mini">${miniWeek(blocksFor(a, C.picks[a]), window.innerWidth < 900 ? 180 : 230)}</div>
+    <div class="stats">
+      <div class="stat"><b>${pr.req ? `${pr.done}/${pr.req}` : C.picks[a].length}</b><span>${pr.req ? 'IPS subjects set' : 'sections picked'}</span></div>
+      <div class="stat"><b style="color:${fx.clashing ? 'var(--bad)' : 'inherit'}">${fx.clashing}</b><span>clashes</span></div>
+      <div class="stat"><b>${days.filter(l => l.length).length}</b><span>school days</span></div>
+    </div>
+    ${alerts ? `<div class="alerts">${alerts}</div>` : ''}
+    <div class="drafts">💾 ${P.drafts.length ? 'drafts:' : ''} ${P.drafts.map((d, k) => `<span class="dchip"><button data-act="load-draft" data-d="${k}" title="load this draft">${esc(d.name)}</button><button data-act="del-draft" data-d="${k}" aria-label="delete draft">✕</button></span>`).join('')}
+      <button class="btn small ghost" data-act="save-draft">save as draft</button></div>
+    <div class="row"><button class="btn small" data-act="share" data-i="${a}">🔗 share plan</button><button class="btn small ghost" data-act="save-image" data-i="${a}">📸 save image</button></div>`;
+  if (!state.rows.length) { list.innerHTML = noClasses(); return; }
+
+  let f = state.pickFilter;
+  if (f === 'need' && !reqs.length) f = 'all';
+  $$('#pickFilter button').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === f));
+  $('#pickFilter [data-f=need]').textContent = N(a) === 'You' ? 'my subjects' : `${N(a)}'s subjects`;
+  const q = norm($('#search').value);
+  const groups = new Map();
+  state.rows.forEach((r, i) => { const k = norm(r.subject); if (!groups.has(k)) groups.set(k, { name: r.subject, idx: [] }); groups.get(k).idx.push(i); });
+  let keys = f === 'need' ? uniq(reqs.map(norm)) : [...groups.keys()];
+  if (f === 'picked') keys = keys.filter(k => groups.get(k).idx.some(i => state.rows[i].on.slice(0, nP()).some(Boolean)));
+  if (f === 'starred') keys = keys.filter(k => groups.get(k).idx.some(i => isStar(i, a)));
+
+  let html = '', n = 0;
+  keys.forEach(k => {
+    const g = groups.get(k), subj = g ? g.name : reqs.find(s => norm(s) === k);
+    let idx = g ? g.idx.filter(i => { const r = state.rows[i]; return !q || norm([r.subject, r.section, r.instructor, r.room, r.days].join(' ')).includes(q); }) : [];
+    if (f === 'starred') idx = idx.filter(i => isStar(i, a));
+    if (q && !idx.length) return;
+    const needers = people().map((p, i) => p.reqs.some(x => norm(x) === k) ? i : -1).filter(i => i >= 0);
+    const st = statusOf(a, subj), isReq = reqs.some(x => norm(x) === k);
+    const pill = st.st === 'ready' ? `<span class="pillst st-ready">✓ section ${esc(st.rows.map(j => state.rows[j].section).join(', '))}</span>`
+               : st.st === 'conflict' ? `<span class="pillst st-conflict">⚠ clash</span>` : isReq ? `<span class="pillst st-missing">still needed</span>` : '';
+    const bks = backupList(a, subj);
+    html += `<div class="subj rv" style="--d:${Math.min(n++ * .04, .4)}s"><div class="subj-head"><h4>${esc(subj)}</h4><span class="row" style="margin:0; gap:8px">${nP() > 1 && needers.length ? `<span class="needers">needed by ${needers.map(i => crest(i, 'sm')).join('')}</span>` : ''}${pill}</span></div><div class="secs">`;
+    if (!g) html += `<div class="sec-card" style="cursor:default"><span class="flag warn">not in the class offerings yet</span></div>`;
+    idx.forEach(i => { html += secCard(i, a, bks); });
+    html += '</div></div>';
+  });
+  list.innerHTML = html || emptyBox(f === 'starred' ? '☆' : '🔍', f === 'picked' ? 'Nothing picked yet' : f === 'starred' ? 'No favorites yet' : 'No matches', f === 'picked' ? 'Tap sections in "all" to add them.' : f === 'starred' ? 'Tap "☆ star" on sections you like. Auto-build ranks them higher.' : 'Try a different search.');
+}
+function secCard(i, a, bks) {
+  const r = state.rows[i], picked = !!r.on[a];
+  const others = people().map((_, p) => p !== a && r.on[p] ? p : -1).filter(p => p >= 0);
+  const bIdx = bks.indexOf(keyOf(r)), star = isStar(i, a), pp = profPref(r);
+  const sNote = state.notes['s:' + keyOf(r)], pNote = profKey(r) ? state.notes['p:' + profKey(r)] : '';
+  let flag = '';
+  if (picked && C.conf[i][a].length) flag = `<span class="flag bad">⚠ clashes with ${esc(C.conf[i][a].join(', '))}</span>`;
+  else if (!picked) { const cl = clashPreview(i, a); if (cl.length) flag = `<span class="flag warn">would clash with ${esc(cl.join(', '))}</span>`; }
+  return `<div class="sec-card" role="button" tabindex="0" aria-pressed="${picked}" style="${pv(a)}" id="row-${i}" data-act="pick" data-i="${i}">
+    <div class="top"><span class="nm">${esc(r.section) || '—'}${star ? '<span class="st">★</span>' : ''}</span>${bIdx >= 0 ? `<span class="flag plan">plan ${'BC'[bIdx]}</span>` : `<span class="chk">${picked ? '✓' : ''}</span>`}</div>
+    <span class="when">${esc(whenText(C.parsed[i], r))}</span>
+    <span class="meta">${[r.room, r.instructor ? r.instructor + (pp === 'prefer' ? ' 👍' : pp === 'avoid' ? ' 👎' : '') : ''].filter(Boolean).map(esc).join(' · ')}${r.pair ? ` · 🔗 ${esc(r.pair)}` : ''}</span>
+    ${others.length ? `<span class="withs">with ${others.map(p => crest(p, 'sm')).join('')}</span>` : ''}
+    ${sNote ? `<span class="cardnote">📝 ${esc(trunc(sNote, 70))}</span>` : ''}${pNote ? `<span class="cardnote">🧑‍🏫 ${esc(trunc(pNote, 70))}</span>` : ''}
+    ${flag}
+    <div class="cardfoot">${picked ? '' : `<button class="bk" data-act="backup" data-i="${i}">${bIdx >= 0 ? `remove plan ${'BC'[bIdx]}` : '+ backup'}</button>`}<button class="bk" data-act="star" data-i="${i}">${star ? '★ starred' : '☆ star'}</button><button class="bk" data-act="note" data-i="${i}">✎ note</button></div>
+  </div>`;
+}
+
+/* ----- auto-build ----- */
+function okRowFor(i, p) {
+  const b = state.build;
+  return C.parsed[i].length > 0
+    && C.parsed[i].every(x => (!b.noSat || !x.days.includes(5)) && x.s >= b.earliest * 60 && (!b.latest || x.e <= b.latest * 60))
+    && !people()[p].busy.some(bz => C.bov(i, bz))
+    && !(b.skipAvoid && profPref(state.rows[i]) === 'avoid');
+}
+function combosFor(p, cap = CONFIG.BUILD_CAP) {
+  const b = state.build, reqs = uniq(people()[p].reqs.map(norm)), rows = state.rows;
+  const cand = {};
+  rows.forEach((r, i) => { const k = norm(r.subject); if (reqs.includes(k)) (cand[k] = cand[k] || []).push(i); });
+  const missing = reqs.filter(k => !cand[k]);
+  const subjects = Object.keys(cand);
+  subjects.forEach(k => {
+    let list = cand[k].filter(i => okRowFor(i, p));
+    if (b.keep) { const cur = list.filter(i => rows[i].on[p]); if (cur.length) list = cur; }
+    cand[k] = list.sort((x, y) => favOf(y, p) - favOf(x, p));
+  });
+  const blocked = subjects.filter(k => !cand[k].length);
+  if (blocked.length) return { results: [], missing, blocked };
+  subjects.sort((x, y) => cand[x].length - cand[y].length);
+  const results = [], chosen = [], assign = {};
+  let leaves = 0;
+  (function rec(d) {
+    if (results.length >= cap || leaves >= cap * 4) return;
+    if (d === subjects.length) { leaves++; const sc = scoreOf([...chosen], p); if (passesShape(sc)) results.push(sc); return; }
+    const s = subjects[d];
+    if (assign[s] !== undefined) return rec(d + 1);
+    for (const i of cand[s]) {
+      const pk = pairIndex(i), add = [i];
+      if (pk >= 0) {
+        const ps = norm(rows[pk].subject);
+        if (assign[ps] !== undefined) { if (assign[ps] !== pk) continue; }
+        else { if (cand[ps] && !cand[ps].includes(pk)) continue; if (!cand[ps] && !okRowFor(pk, p)) continue; add.push(pk); }
+      }
+      if (add.some(x => chosen.some(y => C.ov(x, y))) || (add.length === 2 && C.ov(add[0], add[1]))) continue;
+      add.forEach(x => { assign[norm(rows[x].subject)] = x; chosen.push(x); });
+      rec(d + 1);
+      add.forEach(x => { delete assign[norm(rows[x].subject)]; chosen.pop(); });
+    }
+  })(0);
+  return { results, missing, blocked: [], capped: results.length >= cap || leaves >= cap * 4, tried: leaves };
+}
+function scoreOf(set, p) {
+  const days = dayLists(set);
+  let nDays = 0, gaps = 0, first = 24 * 60, maxDay = 0, maxRow = 0, freeWeekday = false;
+  days.forEach((l, d) => {
+    if (!l.length) { if (d < 5) freeWeekday = true; return; }
+    nDays++; first = Math.min(first, l[0].s);
+    let end = l[0].e, mins = l[0].e - l[0].s, row = 1;
+    maxRow = Math.max(maxRow, 1);
+    for (let k = 1; k < l.length; k++) {
+      const gap = l[k].s - end;
+      gaps += Math.max(0, gap); mins += l[k].e - l[k].s;
+      row = gap < 30 ? row + 1 : 1; maxRow = Math.max(maxRow, row);
+      end = Math.max(end, l[k].e);
+    }
+    maxDay = Math.max(maxDay, mins);
+  });
+  const friends = set.filter(i => state.rows[i].on.some((v, q) => v && q !== p && q < nP())).length;
+  const fav = set.reduce((s, i) => s + favOf(i, p), 0);
+  return { set, days: nDays, gaps, first, maxDay, maxRow, freeWeekday, friends, fav, hops: hopsOf(days).length, lunchBad: noLunchDays(days, people()[p].busy).length };
+}
+function passesShape(o) {
+  const b = state.build;
+  return !(b.maxHours && o.maxDay > b.maxHours * 60) && !(b.maxRow && o.maxRow > b.maxRow) && !(b.freeDay && !o.freeWeekday) && !(b.lunch && o.lunchBad);
+}
+function sortOptions(list) {
+  const tie = (a, b) => b.fav - a.fav || a.hops - b.hops || a.gaps - b.gaps;
+  const f = { days: (a, b) => a.days - b.days || tie(a, b), gaps: (a, b) => a.gaps - b.gaps || a.days - b.days || tie(a, b),
+              late: (a, b) => b.first - a.first || tie(a, b), friends: (a, b) => b.friends - a.friends || a.days - b.days || tie(a, b),
+              fav: (a, b) => b.fav - a.fav || a.days - b.days || a.hops - b.hops || a.gaps - b.gaps }[state.build.sort] || ((a, b) => a.days - b.days);
+  return list.sort(f);
+}
+function optionChips(o, p) {
+  return `<span class="chip">${o.days} day${o.days > 1 ? 's' : ''}</span><span class="chip">${o.gaps ? `${fmtHrs(o.gaps)} of breaks` : 'no breaks'}</span><span class="chip">starts ${fmtT(o.first)}</span>`
+    + (o.fav ? `<span class="chip good">★ ${o.fav} fave pts</span>` : '') + (o.hops ? `<span class="chip">🚶 ${o.hops} tight walk${o.hops > 1 ? 's' : ''}</span>` : '')
+    + (nP() > 1 && p !== undefined && o.friends ? `<span class="chip good">${o.friends} with friends</span>` : '');
+}
+function renderBuild() {
+  const b = state.build, out = $('#buildResults'), together = b.mode === 'together' && nP() > 1;
+  whoChips($('#buildWho'), 'build');
+  $('#buildWhoBar').classList.toggle('hidden', together);
+  const tg = (key, val, label) => `<button class="tgl" data-act="pref" data-k="${key}" data-v="${val}" aria-pressed="${String(b[key]) === String(val)}">${label}</button>`;
+  const T = b.together.filter(p => p < nP());
+  $('#buildPrefs').innerHTML = `<div class="stage-title" style="margin-bottom:14px">Preferences</div>
+    <div class="prefs">
+      ${nP() > 1 ? `<div><p class="pref-label">Build for</p><div class="toggles">${tg('mode', 'solo', `just ${esc(N(state.active))}`)}${tg('mode', 'together', 'friends together ✦')}</div>
+        ${together ? `<div class="toggles" style="margin-top:8px">${people().map((_, p) => `<button class="tgl" data-act="tog-person" data-i="${p}" aria-pressed="${T.includes(p)}">${crest(p, 'sm')} ${esc(N(p))}</button>`).join('')}</div>` : ''}</div>` : ''}
+      <div><p class="pref-label">Saturdays</p><div class="toggles">${tg('noSat', false, 'okay')}${tg('noSat', true, 'no Saturday classes')}</div></div>
+      <div><p class="pref-label">Earliest class</p><div class="toggles">${[7, 8, 9, 10].map(h => tg('earliest', h, h === 7 ? 'any' : `${h}am or later`)).join('')}</div></div>
+      <div><p class="pref-label">Done by</p><div class="toggles">${[0, 17, 18, 19].map(h => tg('latest', h, h ? `${h - 12}pm` : 'any')).join('')}</div></div>
+      <div><p class="pref-label">Class hours per day</p><div class="toggles">${[0, 4, 5, 6].map(h => tg('maxHours', h, h ? `max ${h}h` : 'any')).join('')}</div></div>
+      <div><p class="pref-label">Classes in a row</p><div class="toggles">${[0, 2, 3].map(h => tg('maxRow', h, h ? `max ${h}` : 'any')).join('')}</div></div>
+      <div><p class="pref-label">Day shape</p><div class="toggles">${tg('freeDay', true, '🌿 one weekday free')}${tg('lunch', true, '🍱 keep a lunch break')}</div></div>
+      <div><p class="pref-label">Profs & picks</p><div class="toggles">${tg('skipAvoid', true, '👎 skip avoided profs')}${tg('keep', true, 'keep sections already picked')}</div></div>
+      <div><p class="pref-label">Sort by</p><div class="toggles">${tg('sort', 'days', 'fewest days')}${tg('sort', 'gaps', 'shortest breaks')}${tg('sort', 'late', 'latest start')}${tg('sort', 'fav', '★ favorites')}${nP() > 1 && !together ? tg('sort', 'friends', 'most with friends') : ''}</div></div>
+    </div>`;
+  if (!state.rows.length) { out.innerHTML = noClasses(); return; }
+  if (together) return renderTogether(T, out);
+  const a = state.active;
+  if (!people()[a].reqs.length) { out.innerHTML = emptyBox('📜', `Add ${poss(a)} IPS subjects first`, 'Auto-build uses the subject list in Setup to know what to schedule.', `<button class="btn small" data-go="setup">go to Setup</button>`); return; }
+  const res = combosFor(a);
+  const miss = res.missing.length ? `<p class="hint" style="margin:0 0 14px">Not in the class offerings, so skipped: <b>${esc(res.missing.map(k => people()[a].reqs.find(x => norm(x) === k)).join(', '))}</b></p>` : '';
+  if (res.blocked.length) { out.innerHTML = miss + emptyBox('🙈', 'No sections fit those preferences', `Nothing is left for <b>${esc(res.blocked.map(k => state.rows.find(r => norm(r.subject) === k).subject).join(', '))}</b>. Try loosening a filter, busy time, or avoided prof.`); return; }
+  if (!res.results.length) { out.innerHTML = miss + emptyBox('🧩', 'No schedule fits', 'Every combination clashes or breaks a preference. Try loosening a filter.'); return; }
+  const list = sortOptions(res.results), shown = list.slice(0, buildShown);
+  out.innerHTML = `${miss}<div class="sticky" style="display:inline-block"><span class="note-hand" style="color:var(--ink)">found ${res.capped ? `${list.length}+` : list.length} schedule${list.length > 1 ? 's' : ''} that fit ✦</span></div>
+    <div class="options">${shown.map((o, n) => `<div class="card opt rv" style="--d:${Math.min(n * .05, .5)}s">
+      <div class="row" style="margin:0; justify-content:space-between"><span class="rank">option ${n + 1}</span><button class="btn small" data-act="use-option" data-p="${a}" data-set="${o.set.join(',')}">use this</button></div>
+      <div class="mini">${miniWeek(blocksFor(a, o.set, { noLabel: true, clash: false }), 150)}</div>
+      <div class="chips">${optionChips(o, a)}</div>
+      <ul>${o.set.map(i => `<li><b>${esc(rowLabel(state.rows[i]))}</b>${isStar(i, a) ? ' ★' : ''} · ${esc(whenText(C.parsed[i], state.rows[i]))}</li>`).join('')}</ul>
+    </div>`).join('')}</div>
+    ${list.length > buildShown ? `<div class="row" style="justify-content:center"><button class="btn ghost" data-act="more-options">show more options</button></div>` : ''}`;
+}
+function renderTogether(T, out) {
+  if (T.length < 2) { out.innerHTML = emptyBox('👯', 'Pick at least two people', 'Choose who to build together in the preferences.'); return; }
+  const noReq = T.filter(p => !people()[p].reqs.length);
+  if (noReq.length) { out.innerHTML = emptyBox('📜', 'Missing IPS subjects', `Add IPS subjects for ${noReq.map(p => esc(N(p))).join(', ')} in Setup first.`, `<button class="btn small" data-go="setup">go to Setup</button>`); return; }
+  const per = T.map(p => { const r = combosFor(p, 1500); return { p, ...r, list: sortOptions(r.results).slice(0, 200) }; });
+  const bad = per.filter(x => !x.list.length);
+  if (bad.length) { out.innerHTML = emptyBox('🧩', 'Someone has no schedule that fits', `No clash-free option for ${bad.map(x => esc(N(x.p))).join(', ')} with these preferences. Try loosening a filter.`); return; }
+  const q = o => o.days * 1000 + o.gaps - o.fav * 50;
+  let beams = per[0].list.slice(0, 150).map(o => ({ sets: [o], shared: 0, q: q(o) }));
+  for (let k = 1; k < per.length; k++) {
+    const next = [];
+    beams.forEach(bm => per[k].list.forEach(o => {
+      const cs = new Set(o.set); let sh = 0;
+      bm.sets.forEach(prev => prev.set.forEach(i => { if (cs.has(i)) sh++; }));
+      next.push({ sets: [...bm.sets, o], shared: bm.shared + sh, q: bm.q + q(o) });
+    }));
+    next.sort((a, b) => b.shared - a.shared || a.q - b.q);
+    beams = next.slice(0, 150);
+  }
+  const seen = new Set();
+  beams = beams.filter(bm => { const sig = bm.sets.map(o => o.set.slice().sort().join('.')).join('|'); if (seen.has(sig)) return false; seen.add(sig); return true; });
+  const shown = beams.slice(0, buildShown);
+  out.innerHTML = `<div class="sticky" style="display:inline-block"><span class="note-hand" style="color:var(--ink)">best combos for ${T.map(p => esc(N(p))).join(' + ')} ✦</span></div>
+    <div class="options">${shown.map((bm, n) => {
+      const sharedRows = uniq(bm.sets.flatMap(o => o.set)).filter(i => bm.sets.filter(o => o.set.includes(i)).length >= 2);
+      const blocks = bm.sets.flatMap((o, k) => blocksFor(T[k], o.set, { noLabel: true, clash: false, lane: k, lanes: T.length }));
+      return `<div class="card opt rv" style="--d:${Math.min(n * .05, .5)}s">
+        <div class="row" style="margin:0; justify-content:space-between"><span class="rank">combo ${n + 1}</span><button class="btn small" data-act="use-together" data-n="${n}">use for everyone</button></div>
+        <div class="mini">${miniWeek(blocks, 160)}</div>
+        <div class="chips"><span class="chip good">✦ ${sharedRows.length} shared section${sharedRows.length === 1 ? '' : 's'}</span>${bm.sets.map((o, k) => `<span class="chip">${esc(N(T[k]))}: ${o.days}d</span>`).join('')}</div>
+        ${sharedRows.length ? `<ul>${sharedRows.map(i => `<li><b>${esc(rowLabel(state.rows[i]))}</b> · ${bm.sets.map((o, k) => o.set.includes(i) ? esc(N(T[k])) : '').filter(Boolean).join(', ')}</li>`).join('')}</ul>` : '<p class="hint" style="margin:0">No shared sections in this combo.</p>'}
+        <details><summary>everyone's full list</summary>${bm.sets.map((o, k) => `<p style="margin:8px 0 2px; font-weight:700">${crest(T[k], 'sm')} ${esc(N(T[k]))}</p><ul>${o.set.map(i => `<li>${esc(rowLabel(state.rows[i]))} · ${esc(whenText(C.parsed[i], state.rows[i]))}</li>`).join('')}</ul>`).join('')}</details>
+      </div>`; }).join('')}</div>
+    ${beams.length > buildShown ? `<div class="row" style="justify-content:center"><button class="btn ghost" data-act="more-options">show more combos</button></div>` : ''}`;
+  lastTogether = { T, beams };
+}
+let lastTogether = null;
+function applySet(p, set) {
+  const subjs = new Set(set.map(j => norm(state.rows[j].subject)));
+  state.rows.forEach(r => { if (subjs.has(norm(r.subject))) r.on[p] = false; });
+  set.forEach(j => { state.rows[j].on[p] = true; removeBackup(p, j); });
+}
+
+/* ----- week ----- */
+function renderWeek() {
+  whoChips($('#weekWho'), 'week');
+  const grid = $('#weekGrid');
+  if (state.weekDay === null || state.weekDay === undefined) state.weekDay = window.innerWidth < 640 ? Math.min(Math.max(new Date().getDay() - 1, 0), 5) : -1;
+  const wd = state.weekDay, days = wd < 0 ? [0, 1, 2, 3, 4, 5] : [wd];
+  $('#weekDays').innerHTML = `<button data-act="wd" data-d="-1" aria-pressed="${wd < 0}">all</button>` + DAY_SHORT.map((d, i) => `<button data-act="wd" data-d="${i}" aria-pressed="${wd === i}">${d}</button>`).join('');
+  if (!state.rows.length) { grid.innerHTML = noClasses(); $('#slotPanel').innerHTML = ''; $('#weekStats').innerHTML = ''; return; }
+  const shown = people().map((_, i) => state.weekShow[i] ? i : -1).filter(i => i >= 0);
+  const H = CONFIG.HOUR_PX, S = CONFIG.DAY_START, E = CONFIG.DAY_END, lanes = Math.max(shown.length, 1), lw = 96 / lanes;
+  const cols = DAY_SHORT.map(() => []);
+  const pos = (s, e, lane) => `top:${(s - S * 60) / 60 * H}px; height:${Math.max((e - s) / 60 * H, 18)}px; left:${2 + lane * lw}%; width:${lw - 1.5}%`;
+  shown.forEach((p, lane) => {
+    people()[p].busy.forEach(b => b.days.forEach(d => cols[d].push(`<div class="blk busy" style="${pv(p)}; ${pos(b.s, b.e, lane)}">${esc(b.label)}</div>`)));
+    C.picks[p].forEach(i => {
+      const r = state.rows[i], clash = C.conf[i][p].length > 0;
+      C.parsed[i].forEach(ps => ps.days.forEach(d => cols[d].push(`<div class="blk${clash ? ' clash' : ''}" style="${pv(p)}; ${pos(ps.s, ps.e, lane)}"
+        data-act="goto" data-i="${i}" data-p="${p}" title="${esc(`${N(p)} · ${rowLabel(r)} · ${fmtRange(ps.s, ps.e)}${r.room ? ' · ' + r.room : ''}`)}">${esc(r.subject)}<br><span class="s">${esc(r.section)}${wd >= 0 && r.room ? ' · ' + esc(r.room) : ''}</span></div>`)));
+    });
+  });
+  if (slot && days.includes(slot.day)) cols[slot.day].push(`<div class="slotmark" style="top:${(slot.min - S * 60) / 60 * H}px"></div>`);
+  let axis = '';
+  for (let h = S + 1; h < E; h++) axis += `<span style="top:${(h - S) * H}px">${((h + 11) % 12) + 1}${h >= 12 ? 'pm' : 'am'}</span>`;
+  grid.innerHTML = `<div class="tl ${wd >= 0 ? 'one' : ''}">
+    <div class="tl-head"><div style="width:50px; flex:none"></div>${days.map(d => `<div style="flex:1">${wd >= 0 ? DAY_NAMES[d] : DAY_SHORT[d]}</div>`).join('')}</div>
+    <div class="tl-body" style="height:${(E - S) * H}px"><div class="tl-axis">${axis}</div>${days.map(d => `<div class="tl-col" data-act="slot" data-day="${d}">${cols[d].join('')}</div>`).join('')}</div>
+  </div>`;
+  renderSlot();
+  renderWeekStats(shown);
+}
+function renderSlot() {
+  const el = $('#slotPanel');
+  if (!slot) { el.innerHTML = `<p class="note-hand" style="text-align:center; margin-top:14px">tap an empty spot on the grid to see what's offered then ✎</p>`; return; }
+  const hits = state.rows.map((r, i) => i).filter(i => C.parsed[i].some(ps => ps.days.includes(slot.day) && ps.s <= slot.min && ps.e > slot.min));
+  el.innerHTML = `<div class="card rv" style="margin-top:16px">
+    <div class="row" style="margin:0; justify-content:space-between"><h3>${DAY_NAMES[slot.day]}, ${fmtT(slot.min)}</h3><button class="icon-btn" data-act="slot-close" aria-label="close">✕</button></div>
+    <p class="sub2">${hits.length ? 'Sections that meet at this time. Tap a name to add or remove it for that person.' : 'No sections meet at this time.'}</p>
+    ${hits.map(i => { const r = state.rows[i]; return `<div class="item"><div><div class="t">${esc(rowLabel(r))}</div><div class="m">${esc(whenText(C.parsed[i], r))}${r.instructor ? ' · ' + esc(r.instructor) : ''}</div></div>
+      <div class="whochips">${people().map((_, p) => { const cl = !r.on[p] ? clashPreview(i, p) : []; return `<button class="who" style="${pv(p)}; padding:3px 10px 3px 3px; font-size:13px" data-act="slot-pick" data-i="${i}" data-p="${p}" aria-pressed="${!!r.on[p]}" title="${cl.length ? 'would clash with ' + esc(cl.join(', ')) : ''}">${crest(p, 'sm')}${r.on[p] ? '✓' : cl.length ? '⚠' : '+'}</button>`; }).join('')}</div></div>`; }).join('')}
+  </div>`;
+}
+function renderWeekStats(shown) {
+  $('#weekStats').innerHTML = shown.map((p, n) => {
+    if (!C.picks[p].length) return '';
+    const days = dayLists(C.picks[p]);
+    const mins = days.map(l => l.reduce((s, x) => s + x.e - x.s, 0));
+    const max = Math.max(...mins, 1), total = mins.reduce((a, b) => a + b, 0);
+    const longest = mins.indexOf(Math.max(...mins));
+    const all = days.flat();
+    const first = Math.min(...all.map(x => x.s)), last = Math.max(...all.map(x => x.e));
+    let gaps = 0; days.forEach(l => { let end = l.length ? l[0].e : 0; for (let k = 1; k < l.length; k++) { gaps += Math.max(0, l[k].s - end); end = Math.max(end, l[k].e); } });
+    return `<div class="card rv" style="${pv(p)}; --d:${n * .06}s">
+      <div class="prog-top">${crest(p)}<span class="nm" style="font-size:20px">${N(p) === 'You' ? 'Your' : esc(N(p)) + '\'s'} week in numbers</span></div>
+      <div class="hbars">${mins.map((m, d) => `<div><span>${m ? fmtHrs(m) : ''}</span><i class="${m ? '' : 'zero'}" style="height:${m ? Math.max(m / max * 64, 6) : 3}px"></i>${DAY_SHORT[d]}</div>`).join('')}</div>
+      <div class="chips"><span class="chip">${fmtHrs(total)} of class a week</span><span class="chip">longest: ${DAY_SHORT[longest]} (${fmtHrs(mins[longest])})</span><span class="chip">earliest ${fmtT(first)}</span><span class="chip">latest ${fmtT(last)}</span><span class="chip">${gaps ? fmtHrs(gaps) + ' of breaks' : 'no breaks'}</span></div>
+    </div>`;
+  }).join('');
+}
+
+/* ----- compare ----- */
+function renderCompare() {
+  const el = $('#compareBody');
+  if (!state.rows.length) { el.innerHTML = noClasses(); return; }
+  if (nP() < 2) { el.innerHTML = emptyBox('👯', 'Compare needs a friend', 'Add a friend in Setup, or paste the share link they sent you.', `<button class="btn small" data-act="add-person-go">+ add a friend</button><button class="btn small ghost" data-act="open-import">🔗 add a share code</button>`); return; }
+  const together = state.rows.map((r, i) => ({ i, who: people().map((_, p) => r.on[p] ? p : -1).filter(p => p >= 0) })).filter(x => x.who.length >= 2);
+  const tHtml = together.length ? together.map(x => `<div class="item"><div><div class="t">${esc(rowLabel(state.rows[x.i]))}</div><div class="m">${esc(whenText(C.parsed[x.i], state.rows[x.i]))}</div></div><span class="row" style="margin:0; gap:3px">${x.who.map(p => crest(p)).join('')}</span></div>`).join('')
+    : '<p class="hint">No shared sections yet. Check "match up", or try Auto-build → friends together.</p>';
+  let mHtml = '';
+  uniq(state.rows.map(r => r.subject)).forEach(s => {
+    const k = norm(s);
+    const who = people().map((p, i) => (p.reqs.some(x => norm(x) === k) || C.picks[i].some(j => norm(state.rows[j].subject) === k)) ? i : -1).filter(i => i >= 0);
+    if (who.length < 2) return;
+    const cur = who.map(p => C.picks[p].find(j => norm(state.rows[j].subject) === k));
+    if (cur.every(j => j !== undefined && j === cur[0])) return;
+    const secs = state.rows.map((r, i) => norm(r.subject) === k ? i : -1).filter(i => i >= 0);
+    const fits = secs.filter(i => who.every(p => !clashPreview(i, p).length));
+    mHtml += `<div class="item"><div><div class="t">${esc(s)}</div><div class="wherelist">${who.map((p, n) => `<span>${crest(p, 'sm')} ${esc(N(p))}: ${cur[n] !== undefined ? 'section ' + esc(state.rows[cur[n]].section) : '<i>not picked</i>'}</span>`).join('')}</div></div>
+      <div style="display:grid; gap:6px; justify-items:end">${fits.length ? fits.slice(0, 3).map(i => `<button class="btn small soft" data-act="move" data-i="${i}" data-people="${who.join(',')}">everyone → ${esc(state.rows[i].section)}</button>`).join('') : '<span class="flag warn">no section fits everyone yet</span>'}</div></div>`;
+  });
+  if (!mHtml) mHtml = '<p class="hint">Nothing to match. Everyone who shares a subject is already together.</p>';
+  const busy = DAY_SHORT.map(() => []);
+  let any = false;
+  C.picks.forEach((list, p) => {
+    list.forEach(i => { any = true; C.parsed[i].forEach(ps => ps.days.forEach(d => busy[d].push([ps.s, ps.e]))); });
+    people()[p].busy.forEach(b => b.days.forEach(d => busy[d].push([b.s, b.e])));
+  });
+  let fHtml = '';
+  if (!any) fHtml = '<p class="hint">Pick some classes first.</p>';
+  else DAY_SHORT.forEach((d, di) => {
+    const iv = busy[di].sort((x, y) => x[0] - y[0]);
+    if (!iv.length) return;
+    const gaps = []; let t = CONFIG.DAY_START * 60;
+    iv.forEach(([s, e]) => { if (s - t >= 60) gaps.push([t, s]); t = Math.max(t, e); });
+    if (CONFIG.DAY_END * 60 - t >= 60) gaps.push([t, CONFIG.DAY_END * 60]);
+    fHtml += `<div class="freeday"><b>${d}</b><div>${gaps.length ? gaps.map(([s, e]) => `<span class="freechip">${fmtRange(s, e)}</span>`).join('') : '<span class="m">no common free hour</span>'}</div></div>`;
+  });
+  el.innerHTML = `<div class="cols2">
+    <div class="card tape rv"><h3>Match up</h3><p class="sub2">Subjects you share but aren't taking together yet, with sections that fit everyone's other picks and busy times.</p>${mHtml}</div>
+    <div style="display:grid; gap:20px">
+      <div class="card rv" style="--d:.08s"><h3>Classes together</h3><p class="sub2">Sections two or more of you picked.</p>${tHtml}</div>
+      <div class="card tape right rv" style="--d:.16s"><h3>Free together</h3><p class="sub2">An hour or more between 7am and 9pm when nobody has class or a busy time. Perfect for lunch or study sessions.</p>${fHtml}</div>
+    </div></div>`;
+}
+
+/* ----- checklist ----- */
+function renderCheck() {
+  const el = $('#checkBody');
+  el.innerHTML = people().map((p, i) => {
+    const reqs = uniq(p.reqs), pr = progressOf(i);
+    const msg = !pr.req ? '' : pr.done === pr.req ? 'every subject covered ✦' : pr.done / pr.req >= .5 ? 'more than halfway there' : 'just getting started';
+    const reqRows = reqs.map(s => {
+      const st = statusOf(i, s), offered = state.rows.some(r => norm(r.subject) === norm(s));
+      const ic = { ready: '<span style="color:var(--ok)">✓</span>', conflict: '<span style="color:var(--bad)">⚠</span>', missing: '<span style="color:var(--muted)">○</span>' }[st.st];
+      const planA = st.rows.length ? st.rows.map(j => `${esc(state.rows[j].section)} · ${esc(whenText(C.parsed[j], state.rows[j]))}${C.conf[j][i].length ? ` <span style="color:var(--bad)">· clashes with ${esc(C.conf[j][i].join(', '))}</span>` : ''}`).join(', ')
+        : offered ? '<i>not picked yet</i>' : '<span style="color:var(--warn)">not in the class offerings</span>';
+      const bks = backupList(i, s).map(k => C.byKey.get(k));
+      return `<div class="ck"><span class="ic">${ic}</span><span class="t" data-act="jump" data-p="${i}" data-s="${esc(s)}">${esc(s)}</span>
+        <div class="plans"><span><b>A</b>${planA}</span>${bks.map((j, n) => `<span><b>${'BC'[n]}</b>${esc(state.rows[j].section)} · ${esc(whenText(C.parsed[j], state.rows[j]))}</span>`).join('')}</div></div>`;
+    }).join('');
+    const extras = C.picks[i].filter(j => !reqs.some(s => norm(s) === norm(state.rows[j].subject)));
+    const extraRows = extras.map(j => `<div class="ck"><span class="ic">+</span><span class="t" data-act="jump" data-p="${i}" data-s="${esc(state.rows[j].subject)}">${esc(rowLabel(state.rows[j]))}</span><div class="plans"><span>${esc(whenText(C.parsed[j], state.rows[j]))} · not on the IPS list</span></div></div>`).join('');
+    return `<div class="card rv" style="${pv(i)}; --d:${i * .07}s">
+      <div class="prog-top">${crest(i, 'lg')}<span class="nm">${esc(N(i))}</span>${pr.req ? `<span class="pnum">${pr.done}/${pr.req}</span>` : ''}</div>
+      ${pr.req ? `<div class="bar"><i style="width:${pr.done / pr.req * 100}%"></i></div><div class="note-hand">${msg}</div>` : `<p class="hint">Add the IPS subjects in Setup to track progress.</p>`}
+      <div style="margin-top:8px">${reqRows}${extraRows}</div>
+      ${!reqRows && !extraRows ? '<p class="hint">No picks yet.</p>' : ''}
+      <div class="row"><button class="btn small ghost" data-act="copy-sheet" data-i="${i}">📋 copy as text</button><button class="btn small ghost" data-act="save-image" data-i="${i}">📸 save image</button></div>
+    </div>`;
+  }).join('');
+}
+function cheatSheet(i) {
+  const p = people()[i], out = [`${N(i)}'s enlistment plan${state.sheetName ? ' · ' + state.sheetName : ''}`, ''];
+  uniq(p.reqs).forEach(s => {
+    const st = statusOf(i, s);
+    const a = st.rows.map(j => `${state.rows[j].section} (${whenText(C.parsed[j], state.rows[j])})`).join(', ') || '—';
+    const bks = backupList(i, s).map(k => state.rows[C.byKey.get(k)].section);
+    out.push(`${s}: A ${a}${bks.length ? ' · ' + bks.map((b, n) => `${'BC'[n]} ${b}`).join(' · ') : ''}`);
+  });
+  C.picks[i].filter(j => !p.reqs.some(s => norm(s) === norm(state.rows[j].subject))).forEach(j => out.push(`${rowLabel(state.rows[j])} (${whenText(C.parsed[j], state.rows[j])})`));
+  return out.join('\n');
+}
+
+/* ======================= notes, emoji, busy, drafts ======================= */
+async function editNote(i) {
+  const r = state.rows[i], k = 's:' + keyOf(r), pk = profKey(r);
+  const pp = state.profs[pk] || 'neutral';
+  const res = await openModal(`<h3>Notes · ${esc(rowLabel(r))}</h3><p>Private, only saved on this device. Not included in share links.</p>
+    <label class="field">About this section</label><textarea data-field="sec" style="min-height:80px" placeholder="e.g. my blockmate is here" autofocus>${esc(state.notes[k] || '')}</textarea>
+    ${pk ? `<label class="field">About ${esc(r.instructor)} (shows on all their sections)</label><textarea data-field="prof" style="min-height:80px" placeholder="e.g. strict with attendance">${esc(state.notes['p:' + pk] || '')}</textarea>
+      <p class="pref-label" style="margin-top:14px">This prof</p><input type="hidden" data-field="pref" value="${pp}">
+      <div class="toggles">${[['prefer', '👍 prefer'], ['neutral', 'no preference'], ['avoid', '👎 avoid']].map(([v, l]) => `<button class="tgl" data-mset="pref" data-v="${v}" aria-pressed="${pp === v}">${l}</button>`).join('')}</div>` : ''}
+    <div class="row"><button class="btn small" data-choice="save">save</button><button class="btn small ghost" data-choice="">cancel</button></div>`);
+  if (!res || res.choice !== 'save') return;
+  const setNote = (key, v) => { v = (v || '').trim(); if (v) state.notes[key] = v; else delete state.notes[key]; };
+  setNote(k, res.sec);
+  if (pk) { setNote('p:' + pk, res.prof); if (res.pref === 'neutral') delete state.profs[pk]; else state.profs[pk] = res.pref; }
+  save(); renderClassList(); render(); toast('notes saved 📝');
+}
+async function pickEmoji(i) {
+  const res = await openModal(`<h3>Pick an emoji for ${esc(N(i))}</h3><p>It replaces the initial everywhere.</p>
+    <div class="emoji-grid">${EMOJIS.map(e => `<button data-choice="${e}">${e}</button>`).join('')}</div>
+    <div class="row"><button class="btn small ghost" data-choice="none">use the initial instead</button><button class="btn small ghost" data-choice="">cancel</button></div>`);
+  if (!res || !res.choice) return;
+  state.people[i].emoji = res.choice === 'none' ? '' : res.choice;
+  save(); syncSetup(); render();
+}
+const timeOptions = sel => { let o = ''; for (let m = 7 * 60; m <= 21 * 60; m += 30) o += `<option value="${m}" ${m === sel ? 'selected' : ''}>${fmtT(m)}</option>`; return o; };
+async function addBusy(i) {
+  const res = await openModal(`<h3>Add a busy time for ${esc(N(i))}</h3><p>Classes that overlap it count as clashes, and Auto-build steers around it.</p>
+    <label class="field">What is it?</label><input type="text" data-field="label" placeholder="org meeting, work, commute…" autofocus>
+    <label class="field">Days</label><input type="hidden" data-field="days" value="">
+    <div class="daychips">${DAY_SHORT.map((d, k) => `<button class="daychip" data-mmulti="days" data-v="${k}" aria-pressed="false">${d}</button>`).join('')}</div>
+    <div class="grid2"><div><label class="field">From</label><select data-field="from">${timeOptions(17 * 60)}</select></div><div><label class="field">To</label><select data-field="to">${timeOptions(19 * 60)}</select></div></div>
+    <div class="row"><button class="btn small" data-choice="save">add</button><button class="btn small ghost" data-choice="">cancel</button></div>`);
+  if (!res || res.choice !== 'save') return;
+  const days = res.days ? res.days.split(',').map(Number) : [], s = +res.from, e = +res.to;
+  if (!days.length || e <= s) return toast('Pick at least one day and an end time after the start.');
+  state.people[i].busy.push({ label: (res.label || '').trim() || 'busy', days, s, e });
+  save(); syncSetup(); render(); toast('busy time added');
+}
+async function saveDraft(p) {
+  if (!C.picks[p].length) return toast('Pick some sections first, then save them as a draft.');
+  const res = await openModal(`<h3>Save ${poss(p)} picks as a draft</h3><p>Keep a few versions (like "chill sched" or "MWF only") and switch between them anytime.</p>
+    <input type="text" data-field="name" placeholder="draft name" maxlength="24" autofocus style="margin-top:10px">
+    <div class="row"><button class="btn small" data-choice="save">save draft</button><button class="btn small ghost" data-choice="">cancel</button></div>`);
+  if (!res || res.choice !== 'save') return;
+  const d = people()[p].drafts;
+  d.push({ name: (res.name || '').trim() || `draft ${d.length + 1}`, keys: C.picks[p].map(i => keyOf(state.rows[i])) });
+  if (d.length > 8) d.shift();
+  save(); render(); toast('draft saved 💾');
+}
+
+/* ======================= share links + QR ======================= */
+const b64enc = str => btoa(unescape(encodeURIComponent(str))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+function b64dec(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return decodeURIComponent(escape(atob(s))); }
+const rowArr = r => [r.subject, r.section, r.days, r.time, r.room, r.instructor, r.pair];
+function shareCode(i) {
+  const p = people()[i], bk = {};
+  Object.entries(p.backups).forEach(([s, list]) => { if (list.length) bk[s] = list; });
+  const extra = Object.values(bk).flat().map(k => C.byKey.get(k)).filter(j => j !== undefined).map(j => rowArr(state.rows[j]));
+  return b64enc(JSON.stringify({ v: 1, n: p.name, e: p.emoji, q: p.reqs, r: C.picks[i].map(j => rowArr(state.rows[j])), x: extra, b: bk, u: p.busy, f: p.stars, s: state.sheetName }));
+}
+function qrSvg(text) {
+  if (typeof qrcode !== 'function') return '';
+  try { const q = qrcode(0, 'L'); q.addData(text); q.make(); return q.createSvgTag({ cellSize: 4, margin: 2 }); } catch (e) { return ''; }
+}
+async function sharePlan(i) {
+  const link = location.href.split('#')[0] + '#add=' + shareCode(i);
+  const title = `${N(i) === 'You' ? 'My' : N(i) + '\'s'} enlistment plan`;
+  let copied = false;
+  try { await navigator.clipboard.writeText(link); copied = true; } catch (e) {}
+  const svg = qrSvg(link);
+  const res = await openModal(`<h3>Share ${N(i) === 'You' ? 'your' : esc(N(i)) + '\'s'} plan</h3><p>${copied ? '<b>Link copied!</b> ' : ''}Send it to a friend${svg ? ', or let them scan the QR code' : ''}. Opening it adds this plan to their Compare tab.</p>
+    ${svg ? `<div class="qr">${svg}</div>` : ''}
+    <textarea readonly style="min-height:70px; margin-top:10px; font-size:12px" onclick="this.select()">${esc(link)}</textarea>
+    <div class="row">${navigator.share ? '<button class="btn small" data-choice="native">share…</button>' : ''}<button class="btn small ghost" data-choice="">done</button></div>`);
+  if (res && res.choice === 'native') { try { await navigator.share({ title, text: `${title}. Open it to add it to your Enlistment Hub.`, url: link }); } catch (e) {} }
+}
+async function importCode(raw) {
+  let data;
+  try {
+    const code = (String(raw).match(/#add=([\w-]+)/) || [null, String(raw).trim()])[1];
+    data = JSON.parse(b64dec(code));
+    if (!data || data.v !== 1) throw 0;
+  } catch (e) { toast('That code doesn\'t look right. Copy the whole link and try again.'); return; }
+  const who = data.n || 'a friend';
+  let choices = people().map((_, i) => `<button class="choice" data-choice="${i}">${crest(i)} replace ${esc(N(i))}</button>`).join('');
+  if (nP() < CONFIG.MAX_PEOPLE) choices = `<button class="choice" data-choice="new"><span class="crest" style="${pv(nP())}">+</span> add as a new person</button>` + choices;
+  const res = await openModal(`<h3>Add ${esc(who)}'s plan?</h3><p>${(data.r || []).length} picked section${(data.r || []).length === 1 ? '' : 's'} and ${(data.q || []).length} IPS subject${(data.q || []).length === 1 ? '' : 's'}${data.s ? ` · from "${esc(data.s)}"` : ''}.</p>
+    <div class="choice-list">${choices}</div><div class="row"><button class="btn small ghost" data-choice="">cancel</button></div>`);
+  if (!res || res.choice === '') return;
+  const snap = snapshot(), slotIdx = res.choice === 'new' ? nP() : +res.choice;
+  if (res.choice === 'new') state.people.push(newPerson());
+  state.rows.forEach(r => r.on[slotIdx] = false);
+  Object.assign(state.people[slotIdx], { name: data.n || '', emoji: data.e || '', reqs: data.q || [], ipsAoa: null, ipsName: '', backups: data.b || {}, busy: data.u || [], stars: data.f || [], drafts: [] });
+  let added = 0;
+  const ensureRow = arr => {
+    const [subject, section, days, time, room, instructor, pair] = arr;
+    let k = state.rows.findIndex(r => keyOf(r) === norm(`${subject} ${section}`));
+    if (k < 0) { state.rows.push({ subject, section, days, time, room: room || '', instructor: instructor || '', pair: pair || '', on: [false, false, false, false] }); k = state.rows.length - 1; added++; }
+    return k;
+  };
+  (data.r || []).forEach(arr => { state.rows[ensureRow(arr)].on[slotIdx] = true; });
+  (data.x || []).forEach(ensureRow);
+  state.weekShow[slotIdx] = true; lastComplete = null;
+  save(); syncSetup(); switchTab('compare');
+  undoable(`added ${N(slotIdx)}'s plan${added ? ` (+${added} class${added > 1 ? 'es' : ''} you didn't have)` : ''}`, snap);
+}
+
+/* ======================= image export ======================= */
+async function saveImage(list) {
+  const blocks = [];
+  list.forEach((p, lane) => {
+    C.picks[p].forEach(i => C.parsed[i].forEach(ps => ps.days.forEach(d => blocks.push({ p, lane, d, s: ps.s, e: ps.e, r: state.rows[i] }))));
+    people()[p].busy.forEach(b => b.days.forEach(d => blocks.push({ p, lane, d, s: b.s, e: b.e, busy: b.label })));
+  });
+  if (!blocks.some(b => !b.busy)) return toast('Nothing to show yet. Pick some classes first.');
+  try { await document.fonts.ready; } catch (e) {}
+  const S = Math.floor(Math.min(...blocks.map(b => b.s)) / 60), E = Math.ceil(Math.max(...blocks.map(b => b.e)) / 60);
+  const days = blocks.some(b => b.d === 5) ? 6 : 5;
+  const dark = document.documentElement.dataset.theme === 'dark';
+  const col = dark ? { bg: '#16151f', paper: '#211f2d', ink: '#eeebf7', muted: '#a8a3bd', line: '#353247', dot: 'rgba(201,218,248,.08)', acc: '#a99bf0' }
+                   : { bg: '#f6f2e9', paper: '#fffdf8', ink: '#24203a', muted: '#6b6683', line: '#e4dccb', dot: 'rgba(91,75,183,.12)', acc: '#5b4bb7' };
+  const W = 1240, pad = 48, axisW = 70, top = 150, hourH = 64, H = top + 50 + (E - S) * hourH + 90;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  g.fillStyle = col.bg; g.fillRect(0, 0, W, H);
+  g.fillStyle = col.dot; for (let x = 11; x < W; x += 22) for (let y = 11; y < H; y += 22) { g.beginPath(); g.arc(x, y, 1.3, 0, 7); g.fill(); }
+  const rr = (x, y, w, h, r) => { g.beginPath(); if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h); };
+  const title = list.length === 1 ? (N(list[0]) === 'You' ? 'My week' : `${N(list[0])}'s week`) : 'Our week';
+  g.fillStyle = col.ink; g.font = '800 46px "Bricolage Grotesque", sans-serif'; g.fillText(title, pad, 82);
+  g.font = '700 30px Caveat, cursive'; g.fillStyle = col.acc; g.fillText(state.sheetName || 'enlistment plan ✎', pad, 120);
+  let lx = W - pad;
+  [...list].reverse().forEach(p => { const label = `${people()[p].emoji ? people()[p].emoji + ' ' : ''}${N(p)}`; g.font = '700 20px "DM Sans", sans-serif'; const w = g.measureText(label).width + 40; lx -= w + 8; rr(lx, 58, w, 38, 19); g.fillStyle = COLORS[p].cs; g.fill(); g.strokeStyle = COLORS[p].c; g.lineWidth = 2; g.stroke(); g.fillStyle = COLORS[p].cd; g.fillText(label, lx + 20, 84); });
+  const gx = pad + axisW, gw = W - pad - 14 - gx, cw = gw / days, gy = top + 50, gh = (E - S) * hourH;
+  rr(pad, top, W - pad * 2, gh + 70, 22); g.fillStyle = col.paper; g.fill(); g.strokeStyle = col.line; g.lineWidth = 1.5; g.stroke();
+  g.font = '800 20px "Bricolage Grotesque", sans-serif'; g.fillStyle = col.ink; g.textAlign = 'center';
+  for (let d = 0; d < days; d++) g.fillText(DAY_SHORT[d], gx + cw * d + cw / 2, top + 34);
+  g.textAlign = 'right'; g.font = '700 15px "DM Sans", sans-serif';
+  for (let h = S; h <= E; h++) { const y = gy + (h - S) * hourH; g.fillStyle = col.muted; g.fillText(`${((h + 11) % 12) + 1}${h >= 12 ? 'pm' : 'am'}`, gx - 12, y + 5); g.strokeStyle = col.line; g.lineWidth = 1; g.beginPath(); g.moveTo(gx, y); g.lineTo(gx + gw, y); g.stroke(); }
+  g.textAlign = 'left';
+  const lw = (cw - 12) / list.length, small = list.length > 2;
+  blocks.filter(b => b.d < days).forEach(b => {
+    const x = gx + cw * b.d + 6 + b.lane * lw, y = gy + (b.s - S * 60) / 60 * hourH + 2, w = lw - 4, h = (b.e - b.s) / 60 * hourH - 4;
+    rr(x, y, w, h, 10);
+    if (b.busy) { g.save(); g.clip(); g.strokeStyle = COLORS[b.p].cs; g.lineWidth = 5; for (let t = -h; t < w; t += 12) { g.beginPath(); g.moveTo(x + t, y + h); g.lineTo(x + t + h, y); g.stroke(); } g.restore(); rr(x, y, w, h, 10); g.setLineDash([6, 4]); g.strokeStyle = COLORS[b.p].c; g.lineWidth = 2; g.stroke(); g.setLineDash([]); }
+    else { g.fillStyle = COLORS[b.p].cs; g.fill(); g.strokeStyle = COLORS[b.p].c; g.lineWidth = 2; g.stroke(); }
+    g.save(); rr(x, y, w, h, 10); g.clip(); g.fillStyle = COLORS[b.p].cd;
+    g.font = `800 ${small ? 13 : 16}px "Bricolage Grotesque", sans-serif`; g.fillText(b.busy || b.r.subject, x + 8, y + 21);
+    g.font = `500 ${small ? 12 : 14}px "DM Sans", sans-serif`;
+    if (!b.busy) g.fillText(`${b.r.section}${b.r.room ? ' · ' + b.r.room : ''}`, x + 8, y + 39);
+    g.fillText(fmtRange(b.s, b.e), x + 8, y + (b.busy ? 39 : 56));
+    g.restore();
+  });
+  g.font = '700 24px Caveat, cursive'; g.fillStyle = col.muted; g.fillText('made with Enlistment Hub ✎', pad, H - 30);
+  cv.toBlob(async blob => {
+    const name = `${title.replace(/[^\w]+/g, '-').toLowerCase()}.png`;
+    const file = new File([blob], name, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] }) && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) { try { await navigator.share({ files: [file], title }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast('image saved 📸');
+  }, 'image/png');
+}
+
+/* ======================= loading offerings ======================= */
+function showPane(seg, pane) {
+  $$(`[data-seg="${seg}"] button`).forEach(x => x.setAttribute('aria-pressed', x.dataset.pane === pane));
+  $$(`[data-pane-of="${seg}"]`).forEach(x => x.classList.toggle('hidden', x.dataset.pane !== pane));
+}
+$$('[data-seg] button').forEach(b => b.addEventListener('click', () => showPane(b.closest('[data-seg]').dataset.seg, b.dataset.pane)));
+
+const drop = $('#schedDrop');
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('drag'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drag'); }));
+drop.addEventListener('drop', e => { if (e.dataTransfer.files[0]) loadScheduleFile(e.dataTransfer.files[0]); });
+$('#schedFile').addEventListener('change', e => { if (e.target.files[0]) loadScheduleFile(e.target.files[0]); e.target.value = ''; });
+
+function loadScheduleSheet(name) {
+  const rows = parseScheduleSheet(sheetToAoa(schedWb.Sheets[name]));
+  if (!rows.length) { setStatus(`No sections found in "${name}". Check that it has a "Subject" column.`, true); return 0; }
+  carryPicks(state.rows, rows);
+  state.sheetName = name; state.rows = rows; ensurePeopleFor(rows);
+  refreshReqs(); save(); syncSetup(); render();
+  return rows.length;
+}
+/* shared by file upload and Google Sheets links */
+function loadWorkbook(wb, sourceName, snap) {
+  schedWb = wb;
+  const ipsName = findIpsSheet(wb);
+  if (ipsName) {
+    const aoa = sheetToAoa(wb.Sheets[ipsName]);
+    ['L', 'R'].forEach((side, i) => { const p = state.people[i]; if (p && (!p.reqs.length || p.ipsAoa)) Object.assign(p, { ipsAoa: aoa, ipsName: sourceName, side: p.ipsAoa ? p.side : side }); });
+  }
+  const candidates = wb.SheetNames.filter(n => n !== ipsName);
+  if (!candidates.length) return setStatus('No schedule sheet in that file.', true);
+  $('#sheetPick').innerHTML = candidates.map(n => `<option>${esc(n)}</option>`).join('');
+  $('#sheetPickWrap').classList.toggle('hidden', candidates.length < 2);
+  const best = candidates.includes(state.sheetName) ? state.sheetName : (candidates.find(n => /sem/i.test(n)) || candidates[0]);
+  $('#sheetPick').value = best;
+  const n = loadScheduleSheet(best);
+  if (n) JSON.parse(snap).rows.length ? undoable(`${n} sections loaded`, snap) : toast(`${n} sections loaded ✦`);
+}
+async function loadScheduleFile(file) {
+  if (/\.pdf$/i.test(file.name)) return setStatus('PDFs can\'t be read. Download the sheet as .xlsx instead, or copy the rows and paste them.', true);
+  if (state.rows.length && !(await ask('Replace your classes?', 'This replaces the class offerings with the ones in this file. Picks for sections that still exist are kept.', 'replace'))) return;
+  try { const snap = snapshot(); loadWorkbook(await readFile(file), file.name, snap); }
+  catch (err) { setStatus('Couldn\'t read that file: ' + err.message, true); }
+}
+function sheetUrlCandidates(url) {
+  const pub = url.match(/spreadsheets\/d\/e\/([\w-]+)/), id = url.match(/spreadsheets\/d\/([\w-]+)/);
+  if (pub) return [`https://docs.google.com/spreadsheets/d/e/${pub[1]}/pub?output=xlsx`];
+  if (id) return [`https://docs.google.com/spreadsheets/d/${id[1]}/export?format=xlsx`, `https://docs.google.com/spreadsheets/d/${id[1]}/pub?output=xlsx`];
+  return [url];
+}
+async function loadFromUrl(url, refreshing) {
+  url = (url || '').trim();
+  if (!/^https?:\/\//.test(url)) return setStatus('Paste the full Google Sheets link (starting with https://).', true);
+  setStatus('loading your sheet…');
+  for (const u of sheetUrlCandidates(url)) {
+    try {
+      const res = await fetch(u);
+      if (!res.ok) continue;
+      const buf = await res.arrayBuffer();
+      const wb = XLSX.read(new Uint8Array(buf), { type: 'array' });
+      if (!wb.SheetNames.length) continue;
+      const snap = snapshot();
+      state.sheetUrl = url;
+      loadWorkbook(wb, 'your Google Sheet', snap);
+      if (refreshing) toast('refreshed from your Google Sheet ✦');
+      return;
+    } catch (e) { /* try the next form of the link */ }
+  }
+  setStatus('Couldn\'t load that link.', true);
+  openModal(`<h3>Couldn't load that sheet</h3><p>Browsers can only read Google Sheets that are <b>published to the web</b>:</p>
+    <ol style="color:var(--muted); font-size:14px; padding-left:20px; margin:8px 0">
+      <li>In the sheet: <b>File → Share → Publish to web</b></li>
+      <li>Choose <b>Entire document</b> and <b>Microsoft Excel (.xlsx)</b>, then <b>Publish</b></li>
+      <li>Copy that link and paste it here</li></ol>
+    <p>Or just download it as .xlsx and upload the file. That always works.</p>
+    <div class="row"><button class="btn small" data-choice="">got it</button></div>`);
+}
+
+async function doPaste(replace) {
+  const rows = parsePasted($('#pasteBox').value);
+  if (!rows.length) return setStatus('No classes found in that. Each row needs at least a subject, section, day and time.', true);
+  if (replace && state.rows.length && !(await ask('Replace all classes?', 'The pasted rows replace every class currently loaded. Picks for sections that still exist are kept.', 'replace'))) return;
+  const snap = snapshot();
+  if (replace) { carryPicks(state.rows, rows); state.rows = rows; state.sheetName = ''; state.sheetUrl = ''; }
+  else state.rows = state.rows.concat(rows);
+  ensurePeopleFor(rows);
+  $('#pasteBox').value = '';
+  save(); syncSetup(); render();
+  undoable(`${replace ? 'replaced with' : 'added'} ${rows.length} section${rows.length > 1 ? 's' : ''}`, snap);
+}
+
+$('#dayChips').innerHTML = DAY_SHORT.map((d, i) => `<button type="button" class="daychip" data-day="${i}" aria-pressed="false">${d}</button>`).join('');
+function syncDayChips() { const on = parseDays($('#fDays').value); $$('#dayChips .daychip').forEach(c => c.setAttribute('aria-pressed', on.includes(+c.dataset.day))); }
+$('#fDays').addEventListener('input', syncDayChips);
+$('#dayChips').addEventListener('click', e => {
+  const c = e.target.closest('.daychip'); if (!c) return;
+  const set = new Set(parseDays($('#fDays').value)), d = +c.dataset.day;
+  set.has(d) ? set.delete(d) : set.add(d);
+  $('#fDays').value = [...set].sort().map(i => DAY_NAMES[i]).join(', ');
+  syncDayChips();
+});
+const FORM = { subject: '#fSubject', section: '#fSection', days: '#fDays', time: '#fTime', room: '#fRoom', instructor: '#fInstructor', pair: '#fPair' };
+function clearForm() { Object.values(FORM).forEach(s => $(s).value = ''); editIndex = -1; $('#formSave').textContent = 'add class'; $('#formCancel').classList.add('hidden'); syncDayChips(); }
+function formSave() {
+  const r = {}; for (const k in FORM) r[k] = $(FORM[k]).value.trim();
+  if (!r.subject || !r.days || !r.time) return setStatus('Subject, days and time are needed.', true);
+  if (!parseScheduleData(r.days, r.time).length) return setStatus('Couldn\'t read that day or time. Try "Monday, Thursday" and "1400-1530".', true);
+  if (editIndex >= 0) { Object.assign(state.rows[editIndex], r); toast('saved'); }
+  else { state.rows.push({ ...r, on: [false, false, false, false] }); toast(`added ${r.subject} ${r.section}`); }
+  clearForm(); save(); syncSetup(); render();
+}
+function startEdit(i) {
+  const r = state.rows[i]; editIndex = i;
+  for (const k in FORM) $(FORM[k]).value = r[k] || '';
+  $('#formSave').textContent = 'save changes'; $('#formCancel').classList.remove('hidden');
+  switchTab('setup'); showPane('add', 'type'); syncDayChips();
+  setTimeout(() => $('#fSubject').scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
+}
+
+$('#peopleList').addEventListener('input', e => {
+  const i = +e.target.dataset.i;
+  if (e.target.matches('.pname')) { state.people[i].name = e.target.value.trim(); if (!state.people[i].emoji) e.target.parentElement.querySelector('.crest').textContent = N(i)[0].toUpperCase(); save(); }
+  else if (e.target.matches('.preqs')) { state.people[i].reqs = lines(e.target.value); state.people[i].ipsAoa = null; save(); }
+});
+$('#peopleList').addEventListener('change', async e => {
+  if (e.target.matches('[data-side]')) { const i = +e.target.dataset.side; state.people[i].side = e.target.value; refreshReqs(); save(); syncSetup(); render(); }
+  if (e.target.matches('[data-ips]')) {
+    const i = +e.target.dataset.ips, file = e.target.files[0]; if (!file) return;
+    if (/\.pdf$/i.test(file.name)) return toast('PDFs can\'t be read. Download it as .xlsx, or type the subjects in.');
+    try {
+      const wb = await readFile(file), name = findIpsSheet(wb) || wb.SheetNames[0], p = state.people[i];
+      Object.assign(p, { ipsAoa: sheetToAoa(wb.Sheets[name]), ipsName: file.name, side: i % 2 ? 'R' : 'L' });
+      refreshReqs(); save(); syncSetup(); render();
+      toast(p.reqs.length ? `${p.reqs.length} subjects imported for ${N(i)}` : 'That range is empty. Try the other program or check the cell ranges.');
+    } catch (err) { toast('Couldn\'t read that file: ' + err.message); }
+  }
+});
+$('#semPick').addEventListener('change', e => { state.sem = e.target.value; refreshReqs(); save(); syncSetup(); render(); });
+$$('[data-range]').forEach(inp => inp.addEventListener('change', () => { const [s, k] = inp.dataset.range.split('.'); state.ranges[s][k] = inp.value.trim().toUpperCase(); refreshReqs(); save(); syncSetup(); render(); }));
+$('#classSearch').addEventListener('input', renderClassList);
+$('#sheetPick').addEventListener('change', e => { const snap = snapshot(), n = loadScheduleSheet(e.target.value); if (n) undoable(`${n} sections loaded from "${e.target.value}"`, snap); });
+$('#sheetUrl').addEventListener('keydown', e => { if (e.key === 'Enter') loadFromUrl(e.target.value); });
+
+function addPerson(go) {
+  if (nP() >= CONFIG.MAX_PEOPLE) return;
+  state.people.push(newPerson()); state.weekShow[nP() - 1] = true; lastComplete = null;
+  save(); if (go) switchTab('setup'); syncSetup(); render();
+  setTimeout(() => { const ins = $$('.pname'), el = ins[ins.length - 1]; el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus({ preventScroll: true }); }, 120);
+}
+async function removePerson(i) {
+  const name = N(i);
+  if (!(await ask(`Remove ${name}?`, 'Their IPS list, busy times, drafts and picks will be removed. You can undo right after.', 'remove', true))) return;
+  const snap = snapshot();
+  state.people.splice(i, 1);
+  state.rows.forEach(r => { r.on.splice(i, 1); r.on.push(false); });
+  state.weekShow.splice(i, 1); state.weekShow.push(true);
+  state.build.together = state.build.together.filter(p => p !== i).map(p => p > i ? p - 1 : p);
+  if (state.active >= nP()) state.active = 0;
+  lastComplete = null; save(); syncSetup(); render();
+  undoable(`removed ${name}`, snap);
+}
+
+function exportXlsx() {
+  if (!state.rows.length) return toast('Nothing to export yet.');
+  const n = nP();
+  const aoa = [[...Array(n).fill('Select'), 'Subject', 'Section', 'Day', 'Time', 'Room', 'Instructor', 'Remarks', 'Pair Subject']];
+  state.rows.forEach((r, i) => {
+    const rem = people().map((_, p) => C.conf[i][p].length ? `${N(p)} vs ${C.conf[i][p].join(', ')}` : '').filter(Boolean);
+    aoa.push([...r.on.slice(0, n), r.subject, r.section, r.days, r.time, r.room, r.instructor, rem.length ? '⚠️ ' + rem.join(' | ') : '', r.pair]);
+  });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), (state.sheetName || 'Schedule').slice(0, 31));
+  const maxReq = Math.max(0, ...people().map(p => p.reqs.length));
+  const subj = [people().map((_, i) => N(i))];
+  for (let k = 0; k < maxReq; k++) subj.push(people().map(p => p.reqs[k] || ''));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(subj), 'IPS Subjects');
+  XLSX.writeFile(wb, `enlistment-${(state.sheetName || 'schedule').replace(/[^\w-]+/g, '_')}.xlsx`);
+  toast('exported');
+}
+
+/* ======================= navigation & events ======================= */
+function switchTab(t) {
+  view = t;
+  $$('[data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t));
+  $$('.panel').forEach(p => p.classList.add('hidden'));
+  const panel = $('#panel-' + t); panel.classList.remove('hidden');
+  panel.style.animation = 'none'; void panel.offsetHeight; panel.style.animation = '';
+  buildShown = 12;
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+$$('[data-tab]').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+$$('[data-theme-set]').forEach(b => b.addEventListener('click', () => { state.theme = b.dataset.themeSet; save(); applyTheme(); }));
+$('#pickFilter').addEventListener('click', e => { const b = e.target.closest('[data-f]'); if (!b) return; state.pickFilter = b.dataset.f; save(); render(); });
+$('#search').addEventListener('input', () => render());
+
+function jumpTo(i, p) {
+  if (p !== undefined) state.active = p;
+  $('#search').value = '';
+  if (!people()[state.active].reqs.some(s => norm(s) === norm(state.rows[i].subject))) state.pickFilter = 'all';
+  switchTab('pick');
+  setTimeout(() => { const el = document.getElementById('row-' + i); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1500); } }, 120);
+}
+
+document.addEventListener('keydown', e => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.sec-card[data-act="pick"]')) { e.preventDefault(); e.target.click(); }
+  if (e.key === 'Escape' && !$('#modal').classList.contains('hidden')) closeModal(null);
+});
+document.addEventListener('click', async e => {
+  const t = e.target;
+  if (t.closest('#modal')) return;
+  const go = t.closest('[data-go]'); if (go) return switchTab(go.dataset.go);
+  const el = t.closest('[data-act]'); if (!el) return;
+  const act = el.dataset.act, i = el.dataset.i !== undefined ? +el.dataset.i : null;
+  switch (act) {
+    case 'who':
+      if (el.dataset.mode === 'week') state.weekShow[i] = !state.weekShow[i]; else { state.active = i; buildShown = 12; }
+      save(); return render();
+    case 'add-person': return addPerson(false);
+    case 'add-person-go': return addPerson(true);
+    case 'remove-person': return removePerson(i);
+    case 'emoji': return pickEmoji(i);
+    case 'add-busy': return addBusy(i);
+    case 'del-busy': {
+      const snap = snapshot(); state.people[i].busy.splice(+el.dataset.b, 1);
+      save(); syncSetup(); render(); return undoable('busy time removed', snap);
+    }
+    case 'pick': return togglePick(i, state.active);
+    case 'backup': return toggleBackup(i, state.active);
+    case 'star': return toggleStar(i, state.active);
+    case 'note': return editNote(i);
+    case 'fix': {
+      const snap = snapshot(), msgs = [], to = +el.dataset.to;
+      setPick(to, state.active, true, msgs);
+      save(); render(); return undoable(`moved ${rowLabel(state.rows[+el.dataset.from])} → ${state.rows[to].section} ✦`, snap);
+    }
+    case 'save-draft': return saveDraft(state.active);
+    case 'load-draft': {
+      const p = state.active, d = people()[p].drafts[+el.dataset.d], snap = snapshot();
+      state.rows.forEach(r => r.on[p] = d.keys.includes(keyOf(r)));
+      save(); render(); return undoable(`loaded "${d.name}"`, snap);
+    }
+    case 'del-draft': {
+      const snap = snapshot(), d = people()[state.active].drafts.splice(+el.dataset.d, 1)[0];
+      save(); render(); return undoable(`deleted draft "${d.name}"`, snap);
+    }
+    case 'edit': return startEdit(i);
+    case 'del': {
+      const snap = snapshot(), name = rowLabel(state.rows[i]);
+      state.rows.splice(i, 1); if (editIndex >= 0) clearForm();
+      save(); syncSetup(); render(); return undoable(`deleted ${name}`, snap);
+    }
+    case 'paste-add': return doPaste(false);
+    case 'paste-replace': return doPaste(true);
+    case 'load-url': return loadFromUrl($('#sheetUrl').value);
+    case 'refresh-url': return loadFromUrl(state.sheetUrl, true);
+    case 'form-save': return formSave();
+    case 'form-cancel': return clearForm();
+    case 'export': return exportXlsx();
+    case 'clear-picks': {
+      if (!(await ask('Clear all picks?', 'Every pick and backup for everyone will be cleared. Classes, IPS lists, notes and drafts stay.', 'clear'))) return;
+      const snap = snapshot();
+      state.rows.forEach(r => r.on = [false, false, false, false]); state.people.forEach(p => p.backups = {});
+      save(); render(); return undoable('all picks cleared', snap);
+    }
+    case 'reset': {
+      if (!(await ask('Start fresh?', 'This removes all classes, people, IPS lists, notes and picks from this browser.', 'start fresh', true))) return;
+      const snap = snapshot();
+      state = Object.assign(freshState(), { theme: state.theme }); schedWb = null; lastComplete = null; slot = null;
+      $('#sheetPickWrap').classList.add('hidden'); clearForm(); save(); syncSetup(); render();
+      return undoable('everything cleared', snap);
+    }
+    case 'share': return sharePlan(i);
+    case 'open-import': {
+      const res = await openModal(`<h3>Add a friend's plan</h3><p>Paste the share link or code they sent you.</p><textarea data-field="code" style="min-height:90px; margin-top:10px" autofocus></textarea>
+        <div class="row"><button class="btn small" data-choice="go">add</button><button class="btn small ghost" data-choice="">cancel</button></div>`);
+      if (res && res.choice === 'go' && (res.code || '').trim()) setTimeout(() => importCode(res.code), 0);
+      return;
+    }
+    case 'save-image': return saveImage([i]);
+    case 'save-image-week': return saveImage(people().map((_, p) => state.weekShow[p] ? p : -1).filter(p => p >= 0));
+    case 'copy-sheet': {
+      const text = cheatSheet(i);
+      try { await navigator.clipboard.writeText(text); toast('copied! paste it into your notes 📋'); }
+      catch (err) { openModal(`<h3>Copy this</h3><textarea readonly style="min-height:200px" onclick="this.select()">${esc(text)}</textarea><div class="row"><button class="btn small" data-choice="">done</button></div>`); }
+      return;
+    }
+    case 'pref': {
+      const k = el.dataset.k, v = el.dataset.v;
+      const val = v === 'true' ? true : v === 'false' ? false : isNaN(+v) ? v : +v;
+      // on/off toggles (true-only buttons) flip when pressed again
+      state.build[k] = (typeof val === 'boolean' && state.build[k] === val && ['freeDay', 'lunch', 'skipAvoid', 'keep'].includes(k)) ? !val : val;
+      buildShown = 12; save(); return render();
+    }
+    case 'tog-person': {
+      const T = state.build.together;
+      state.build.together = T.includes(i) ? T.filter(p => p !== i) : [...T, i].sort();
+      buildShown = 12; save(); return render();
+    }
+    case 'more-options': buildShown += 12; return render();
+    case 'use-option': {
+      const p = +el.dataset.p, set = el.dataset.set.split(',').map(Number), snap = snapshot();
+      applySet(p, set);
+      save(); render(); return undoable(`applied to ${poss(p)} plan ✦`, snap);
+    }
+    case 'use-together': {
+      if (!lastTogether) return;
+      const bm = lastTogether.beams[+el.dataset.n], snap = snapshot();
+      bm.sets.forEach((o, k) => applySet(lastTogether.T[k], o.set));
+      save(); render(); return undoable('applied to everyone ✦', snap);
+    }
+    case 'wd': state.weekDay = +el.dataset.d; save(); return render();
+    case 'goto': return jumpTo(i, +el.dataset.p);
+    case 'slot': {
+      const rect = el.getBoundingClientRect(), y = e.clientY - rect.top;
+      const min = Math.round((CONFIG.DAY_START * 60 + y / CONFIG.HOUR_PX * 60) / 15) * 15;
+      slot = { day: +el.dataset.day, min }; render();
+      setTimeout(() => $('#slotPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
+      return;
+    }
+    case 'slot-close': slot = null; return render();
+    case 'slot-pick': return togglePick(i, +el.dataset.p);
+    case 'move': {
+      const snap = snapshot(), msgs = [];
+      el.dataset.people.split(',').map(Number).forEach(p => setPick(i, p, true, msgs));
+      save(); render(); return undoable(`everyone's in ${rowLabel(state.rows[i])} ✦`, snap);
+    }
+    case 'jump': {
+      const p = +el.dataset.p, s = norm(el.dataset.s);
+      const k = state.rows.findIndex(r => norm(r.subject) === s && r.on[p]);
+      const first = k >= 0 ? k : state.rows.findIndex(r => norm(r.subject) === s);
+      if (first >= 0) jumpTo(first, p);
+      return;
+    }
+  }
+});
+
+/* ======================= start ======================= */
+applyTheme();
+syncSetup();
+C = compute();
+if (state.rows.length) switchTab('pick'); else render();
+const shared = (location.hash.match(/#add=([\w-]+)/) || [])[1];
+if (shared) { history.replaceState(null, '', location.pathname + location.search); setTimeout(() => importCode(shared), 300); }
+</script>
+</body>
+</html>
