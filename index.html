@@ -2136,7 +2136,7 @@ function exportXlsx() {
 }
 
 /* ======================= Google Sheets sync: profiles & rooms ======================= */
-const SYNC_URL = ''; // ← paste your Apps Script web app URL (ends in /exec) between the quotes
+const SYNC_URL = 'https://script.google.com/macros/s/AKfycbw1FL9ma3mPFCzHabz89AVlWWySAPdQiQ79iiNbKD5aOpvNmrRso0bOWw5bgeOPa762/exec'; // ← paste your Apps Script web app URL (ends in /exec) between the quotes
 const SY = () => state.sync;
 const syncUrl = () => SYNC_URL || SY().url || '';
 const connected = () => !!(syncUrl() && SY().me && SY().mine);
