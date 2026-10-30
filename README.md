@@ -9,7 +9,7 @@ Files:
 
 | Tab | Term |
 |---|---|
-| SY 26-27 1st sem | 1st semester |
+| SY 26-27 1st sem | 1st semester (filled in from your pasted list) |
 | SY 26-27 2nd sem | 2nd semester (filled in from the 3rd Year Scheds PDF) |
 | SY 27-28 0th sem | intersession |
 | SY 27-28 1st sem | 1st semester |
@@ -41,7 +41,7 @@ Only the person who owns the Google Sheet does this. Friends just open the site 
 3. At the top, choose the function **`EH_setup`** and click **▶ Run**.
 4. Google asks for permission. This is your own script asking to edit your own sheet:
    - **Review permissions** → choose your account → **Advanced** → **Go to … (unsafe)** → **Allow**.
-   - This creates two hidden tabs, **EH Profiles** and **EH Rooms**.
+   - This creates hidden tabs: **EH Profiles**, **EH Rooms**, **EH Archive** and **EH Stats**.
 
 ### b. Deploy it as a web app
 1. Click **Deploy → New deployment** → the ⚙ gear → **Web app**.
@@ -58,7 +58,10 @@ Pick one:
 - **Or:** open the site → **Setup → Plan together, live**, paste the URL there, and tap **connect**. Only your browser remembers it, but your invite links carry it to friends.
 
 ### d. Updating the script later
-If you ever change `Sync.gs`: **Deploy → Manage deployments → ✏️ → Version: New version → Deploy**. The URL stays the same.
+If you ever change `Sync.gs`:
+1. Paste the new version over the old one and click 💾 **Save**.
+2. Run **`EH_setup`** once more. It adds any new hidden tabs and columns, and never deletes data.
+3. **Deploy → Manage deployments → ✏️ → Version: New version → Deploy**. The URL stays the same, so the site keeps working.
 
 ---
 
@@ -72,12 +75,22 @@ If you ever change `Sync.gs`: **Deploy → Manage deployments → ✏️ → Ver
    - Friends open it, make a quick profile, and they're in.
 4. **Plan:** everyone sees each other's picks update every few seconds. Use the room menu at the top to switch between rooms, or pick **just me** to see only your own plan.
 
+### Room extras
+- **What's new:** the Compare tab starts with the room's activity, like "Bea picked THEO 13 – D2" or "Bea switched THEO 13 from D1 to D2". A red number on the Compare tab shows what you haven't seen yet.
+- **💌 Join me:** on a section you picked, tap *ask … to join* (it shows when a friend needs that subject but isn't in your section). You can also tap 💌 in *Match up*.
+  - Your friend gets a pop-up. **Yes, join!** switches them into that section, and you see "Bea joined you" in What's new.
+  - *Later* keeps the request in their What's new card.
+- **💬 Room notes:** tap *✎ note* on a section. The *Room note* box is seen by everyone in the room (140 characters). The 📝 private box stays private.
+- **Reactions:** while viewing a friend's plan, tap ❤️ 😭 🤝 🔥 👀 on their picked sections. They see "🔥 Bea" on their card. Tap again to remove it.
+
 ### How it's kept safe
 - **Your PIN protects your plan.** Friends can see your picks, but only you can change them, in every room.
 - **Room codes control who can join.** A room holds up to 4 people, and you can be in up to 20 rooms.
 - **Room creators** can rename the room, remove someone, or make a **new room code** (old invite links stop working).
-- **PINs are never stored**, only scrambled (salted hashes).
-- **Wrong-PIN lockout:** after 5 wrong tries, the profile locks for 15 minutes. The lock doubles each time after that.
+- **PINs and recovery codes are never stored**, only scrambled (salted hashes).
+- **Forgot your PIN?** Everyone gets a one-time **recovery code** when they make a profile (screenshot it!). On the sign-in screen, tap **forgot PIN?**, enter the recovery code and a new PIN. You then get a new recovery code, and other devices are signed out.
+  - Lost it, or made your profile before recovery codes existed? Setup → *your account* → **🔑 new recovery code** (while you're still signed in).
+- **Wrong-PIN lockout:** after 5 wrong tries (PINs or recovery codes), the profile locks for 15 minutes. The lock doubles each time after that.
 - **The sheet owner can see** everyone's saved plans and notes in the hidden *EH* tabs, but never their PINs. Notes are private from friends, but not from the sheet owner.
 - **Undoing mistakes:** if something goes wrong, use **File → Version history** in the sheet.
 
@@ -109,7 +122,10 @@ If you ever change `Sync.gs`: **Deploy → Manage deployments → ✏️ → Ver
   | LEAD/BUSETH | any subject, until the real rule is known |
 
   The ECON, FAA and LEAD/BUSETH rules are assumptions. Edit the Electives tab if they're wrong.
-- **Forgot your PIN?** The sheet owner can delete your row in **EH Profiles** so you can make a new profile. Your synced plan is lost, so re-pick your sections.
+- **Forgot your PIN and lost the recovery code?** The sheet owner can delete your row in **EH Profiles** so you can make a new profile. Your synced plan is lost, so re-pick your sections.
+- **Owner stats:** the *Start here* tab has a **📊 Hub stats** area: profiles, people active this week, rooms, average room size, archived rooms, and the most picked sections. The script refreshes it about every 15 minutes while people use the site, or run **`EH_refreshStats`** in Apps Script to refresh it now.
+  - Older sheets without that heading get it added at the bottom of *Start here*.
+- **Old rooms tidy themselves up:** a room nobody has opened for about a term (150 days, `ARCHIVE_DAYS` in `Sync.gs`) moves to the hidden **EH Archive** tab and disappears from everyone's room list. Joining with the old room code brings it back for everyone who was in it. Run **`EH_archiveOldRooms`** to tidy up right away.
 - **Signing out** of a device keeps a local copy of your plan. Your synced plan stays in the sheet.
 - **The ticks in the sheet's Select columns** aren't updated by the site. Picks are saved per person in the *EH Profiles* tab instead.
 
@@ -119,14 +135,16 @@ If you ever change `Sync.gs`: **Deploy → Manage deployments → ✏️ → Ver
 
 - **Pick:**
   - tap sections to add them, with clash warnings before you pick
+  - in a room: 💌 join-me requests, 💬 room notes and reactions
   - ★ favorites, private notes, 👍/👎 profs, and Plan B/C backups
   - a clash fixer, 🚶 tight-walk and 🍱 lunch warnings, and saved drafts
 - **Auto-build:**
   - every clash-free schedule, with filters for Saturdays, earliest and latest class, hours per day, classes in a row, a free weekday, lunch, and avoided profs
   - **friends together** finds combos with the most shared sections
 - **Week:** everyone's timetable in lanes, with busy times shaded. Tap an empty slot to see what's offered then. Includes week-in-numbers stats and saving as an image.
-- **Compare:** match up shared subjects, see classes together, and find free time together.
+- **Compare:** the room's *What's new* feed, then match up shared subjects, see classes together, and find free time together.
 - **Checklist:** Plan A, B and C for every IPS subject. Copy it as text or save it as an image.
+- **Day / night:** the ☀ / ☾ switch at the top right.
 - **Without syncing:** everything also works offline on one device, with up to 4 people and share links / QR codes.
 
 ## Sheet format

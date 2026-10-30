@@ -260,6 +260,20 @@
   .flag.bad { background: var(--bad-soft); color: var(--bad); }
   .flag.plan { background: var(--note); color: var(--ink); font-family: var(--hand); font-size: 18px; padding: 0 9px; margin: 0; transform: rotate(-3deg); }
   .cardfoot { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+  .cardnote.room { background: var(--stage); transform: rotate(.6deg); font-size: 17px; }
+  .reacts { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+  .reacts span { font-size: 12.5px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; color: var(--muted); font-weight: 700; }
+  .rx { display: flex; gap: 2px; margin-top: 4px; }
+  .rx button { border: 1.5px solid transparent; background: none; border-radius: 999px; font-size: 16px; line-height: 1; padding: 4px 6px; cursor: pointer; filter: grayscale(.6); opacity: .75; transition: transform .15s, opacity .15s; }
+  .rx button:hover { transform: scale(1.18); opacity: 1; filter: none; }
+  .rx button[aria-pressed="true"] { border-color: var(--accent); background: var(--surface); opacity: 1; filter: none; }
+  .maintabs .badge { display: inline-grid; place-items: center; min-width: 19px; height: 19px; padding: 0 5px; margin-left: 6px; border-radius: 999px; background: var(--bad); color: #fff; font-size: 11.5px; font-weight: 800; vertical-align: 1px; }
+  .feed .ev { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px dashed var(--line); font-size: 14.5px; }
+  .feed .ev .m { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .feed .ev.new { position: relative; }
+  .feed .ev.new::before { content: ""; position: absolute; left: -12px; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; border-radius: 50%; background: var(--bad); }
+  .nudge { background: var(--note); border-radius: 12px; padding: 10px 12px; margin: 8px 0; display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; font-size: 14.5px; }
+  .nudge .row { margin: 0; }
   .bk { border: none; background: none; padding: 2px 0; font-size: 13px; font-weight: 700; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
   .sec-card[aria-pressed="true"] .bk { color: inherit; }
   .flash { animation: flash 1.4s ease; }
@@ -665,7 +679,7 @@ function crest(i, cls = '') {
 const STORE = 'enlistmentHub.v4';
 const newPerson = () => ({ name: '', emoji: '', reqs: [], ipsAoa: null, ipsName: '', ips: null, side: 'L', backups: {}, stars: [], busy: [], drafts: [], slots: {} });
 const BUILD_DEFAULTS = { noSat: false, earliest: 7, latest: 0, keep: false, sort: 'days', maxHours: 0, maxRow: 0, freeDay: false, lunch: false, skipAvoid: true, mode: 'solo', together: [0, 1, 2, 3] };
-const freshSync = () => ({ url: '', me: null, mine: null, rooms: [], room: '', roomCache: {}, tab: '', tabs: [], tabPicked: false, offAt: 0, offSig: '', offVer: 0, updated: 0, lastPushed: '' });
+const freshSync = () => ({ url: '', me: null, mine: null, rooms: [], room: '', roomCache: {}, tab: '', tabs: [], tabPicked: false, offAt: 0, offSig: '', offVer: 0, updated: 0, lastPushed: '', seen: {}, asked: {}, hasRec: true });
 function freshState() {
   return { people: [newPerson()], rows: [], sheetName: '', sheetUrl: '', sem: 'auto', ranges: clone(CONFIG.RANGES), active: 0,
            weekShow: [true, true, true, true], weekDay: null, pickFilter: 'need', theme: null, notes: {}, profs: {}, build: clone(BUILD_DEFAULTS), sync: freshSync(), electives: null };
@@ -730,7 +744,7 @@ function openModal(html) {
   if (modalResolve) { const r = modalResolve; modalResolve = null; r(null); }
   $('#modalCard').innerHTML = html;
   $('#modal').classList.remove('hidden');
-  setTimeout(() => { const f = $('#modal [autofocus]'); if (f) f.focus(); }, 50);
+  setTimeout(() => { const f = $('#modal [autofocus]'); if (f && !$('#modalCard').contains(document.activeElement)) f.focus(); }, 50);
   return new Promise(res => { modalResolve = res; });
 }
 function closeModal(val) {
@@ -1220,6 +1234,7 @@ function render() {
   if (view === 'week') renderWeek();
   if (view === 'compare') renderCompare();
   if (view === 'check') renderCheck();
+  renderBadge();
 }
 function checkCelebrate() {
   const now = people().map((_, p) => { const pr = progressOf(p); return pr.req > 0 && pr.done === pr.req; });
@@ -1368,6 +1383,8 @@ function secCard(i, a, bks) {
   const others = people().map((_, p) => p !== a && r.on[p] ? p : -1).filter(p => p >= 0);
   const bIdx = bks.indexOf(keyOf(r)), star = isStar(i, a), pp = profPref(r);
   const sNote = state.notes['s:' + keyOf(r)], pNote = profKey(r) ? state.notes['p:' + profKey(r)] : '';
+  const so = SOC(), me = myIdx(), rNotes = so ? roomNotes(keyOf(r)) : [], rx = so && picked ? reactsOn(a, keyOf(r)) : null;
+  const askable = so && picked && a === me ? askableFor(i) : [];
   let flag = '';
   if (picked && C.conf[i][a].length) flag = `<span class="flag bad">⚠ clashes with ${esc(C.conf[i][a].join(', '))}</span>`;
   else if (!picked) { const cl = clashPreview(i, a); if (cl.length) flag = `<span class="flag warn">would clash with ${esc(cl.join(', '))}</span>`; }
@@ -1377,8 +1394,11 @@ function secCard(i, a, bks) {
     <span class="meta">${[r.room, r.instructor ? r.instructor + (pp === 'prefer' ? ' 👍' : pp === 'avoid' ? ' 👎' : '') : ''].filter(Boolean).map(esc).join(' · ')}${r.pair ? ` · 🔗 ${esc(r.pair)}` : ''}</span>
     ${others.length ? `<span class="withs">with ${others.map(p => crest(p, 'sm')).join('')}</span>` : ''}
     ${sNote ? `<span class="cardnote">📝 ${esc(trunc(sNote, 70))}</span>` : ''}${pNote ? `<span class="cardnote">🧑‍🏫 ${esc(trunc(pNote, 70))}</span>` : ''}
+    ${rNotes.map(n => `<span class="cardnote room">💬 ${esc(n.who)}: ${esc(n.text)}</span>`).join('')}
+    ${rx && rx.list.length ? `<span class="reacts">${rx.list.map(x => `<span title="${esc(x.who.join(', '))}">${x.e} ${esc(x.who.join(', '))}</span>`).join('')}</span>` : ''}
     ${flag}
-    <div class="cardfoot">${picked || !canEditQ(a) ? '' : `<button class="bk" data-act="backup" data-i="${i}">${bIdx >= 0 ? `remove plan ${'BC'[bIdx]}` : '+ backup'}</button>`}${canEditQ(a) ? `<button class="bk" data-act="star" data-i="${i}">${star ? '★ starred' : '☆ star'}</button>` : ''}<button class="bk" data-act="note" data-i="${i}">✎ note</button></div>
+    ${rx && a !== me ? `<div class="rx" aria-label="react to ${esc(N(a))}'s pick">${REACTS.map(e => `<button data-act="react" data-i="${i}" data-e="${e}" aria-pressed="${rx.mine === e}" title="react ${e}">${e}</button>`).join('')}</div>` : ''}
+    <div class="cardfoot">${picked || !canEditQ(a) ? '' : `<button class="bk" data-act="backup" data-i="${i}">${bIdx >= 0 ? `remove plan ${'BC'[bIdx]}` : '+ backup'}</button>`}${canEditQ(a) ? `<button class="bk" data-act="star" data-i="${i}">${star ? '★ starred' : '☆ star'}</button>` : ''}<button class="bk" data-act="note" data-i="${i}">✎ note</button>${askable.length ? `<button class="bk" data-act="nudge" data-i="${i}">💌 ask ${askable.length === 1 ? esc(N(askable[0])) : 'friends'} to join</button>` : ''}</div>
   </div>`;
 }
 
@@ -1634,6 +1654,7 @@ function renderCompare() {
   if (!state.rows.length) { el.innerHTML = noClasses(); return; }
   if (nP() < 2 && connected()) { el.innerHTML = emptyBox('👯', 'Compare needs friends', SY().room ? 'Nobody else is in this room yet. Send them an invite!' : 'Make a room and invite friends, or join theirs with a code. You can be in several rooms and switch between them at the top.', SY().room ? `<button class="btn small" data-act="invite">👥 invite</button>` : `<button class="btn small" data-act="room-new">+ new room</button><button class="btn small ghost" data-act="room-join">join with a code</button>`); return; }
   if (nP() < 2) { el.innerHTML = emptyBox('👯', 'Compare needs a friend', 'Add a friend in Setup, or paste the share link they sent you.', `<button class="btn small" data-act="add-person-go">+ add a friend</button><button class="btn small ghost" data-act="open-import">🔗 add a share code</button>`); return; }
+  markFeedSeen();
   const together = state.rows.map((r, i) => ({ i, who: people().map((_, p) => r.on[p] ? p : -1).filter(p => p >= 0) })).filter(x => x.who.length >= 2);
   const tHtml = together.length ? together.map(x => `<div class="item"><div><div class="t">${esc(rowLabel(state.rows[x.i]))}</div><div class="m">${esc(whenText(C.parsed[x.i], state.rows[x.i]))}</div></div><span class="row" style="margin:0; gap:3px">${x.who.map(p => crest(p)).join('')}</span></div>`).join('')
     : '<p class="hint">No shared sections yet. Check "match up", or try Auto-build → friends together.</p>';
@@ -1647,7 +1668,7 @@ function renderCompare() {
     const secs = state.rows.map((r, i) => norm(r.subject) === k ? i : -1).filter(i => i >= 0);
     const fits = secs.filter(i => who.every(p => !clashPreview(i, p).length));
     mHtml += `<div class="item"><div><div class="t">${esc(s)}</div><div class="wherelist">${who.map((p, n) => `<span>${crest(p, 'sm')} ${esc(N(p))}: ${cur[n] !== undefined ? 'section ' + esc(state.rows[cur[n]].section) : '<i>not picked</i>'}</span>`).join('')}</div></div>
-      <div style="display:grid; gap:6px; justify-items:end">${fits.length ? fits.slice(0, 3).map(i => `<button class="btn small soft" data-act="move" data-i="${i}" data-people="${who.join(',')}">everyone → ${esc(state.rows[i].section)}</button>`).join('') : '<span class="flag warn">no section fits everyone yet</span>'}</div></div>`;
+      <div style="display:grid; gap:6px; justify-items:end">${fits.length ? fits.slice(0, 3).map(i => `<span class="row" style="margin:0; gap:6px">${SOC() && who.includes(myIdx()) && who.length > 1 ? `<button class="btn small ghost" data-act="nudge-ask" data-i="${i}" data-people="${who.filter(p => p !== myIdx()).join(',')}" title="ask them to take this section with you">💌</button>` : ''}<button class="btn small soft" data-act="move" data-i="${i}" data-people="${who.join(',')}">${connected() ? 'me' : 'everyone'} → ${esc(state.rows[i].section)}</button></span>`).join('') : '<span class="flag warn">no section fits everyone yet</span>'}</div></div>`;
   });
   if (!mHtml) mHtml = '<p class="hint">Nothing to match. Everyone who shares a subject is already together.</p>';
   const busy = DAY_SHORT.map(() => []);
@@ -1666,7 +1687,7 @@ function renderCompare() {
     if (CONFIG.DAY_END * 60 - t >= 60) gaps.push([t, CONFIG.DAY_END * 60]);
     fHtml += `<div class="freeday"><b>${d}</b><div>${gaps.length ? gaps.map(([s, e]) => `<span class="freechip">${fmtRange(s, e)}</span>`).join('') : '<span class="m">no common free hour</span>'}</div></div>`;
   });
-  el.innerHTML = `<div class="cols2">
+  el.innerHTML = feedCard() + `<div class="cols2">
     <div class="card tape rv"><h3>Match up</h3><p class="sub2">Subjects you share but aren't taking together yet, with sections that fit everyone's other picks and busy times.</p>${mHtml}</div>
     <div style="display:grid; gap:20px">
       <div class="card rv" style="--d:.08s"><h3>Classes together</h3><p class="sub2">Sections two or more of you picked.</p>${tHtml}</div>
@@ -1715,8 +1736,10 @@ function cheatSheet(i) {
 async function editNote(i) {
   const r = state.rows[i], k = 's:' + keyOf(r), pk = profKey(r);
   const pp = state.profs[pk] || 'neutral';
-  const res = await openModal(`<h3>Notes · ${esc(rowLabel(r))}</h3><p>Private, only saved on this device. Not included in share links.</p>
-    <label class="field">About this section</label><textarea data-field="sec" style="min-height:80px" placeholder="e.g. my blockmate is here" autofocus>${esc(state.notes[k] || '')}</textarea>
+  const so = SOC(), mineRN = so ? myRoomNote(keyOf(r)) : '';
+  const res = await openModal(`<h3>Notes · ${esc(rowLabel(r))}</h3><p>${connected() ? 'Private notes are saved to your profile and only you see them.' : 'Private, only saved on this device. Not included in share links.'}</p>
+    ${so ? `<label class="field">💬 Room note · everyone in "${esc(curRoom().name)}" sees it</label><textarea data-field="room" maxlength="140" style="min-height:60px" placeholder="e.g. this room is far, prof usually starts late">${esc(mineRN)}</textarea>` : ''}
+    <label class="field">📝 Private · about this section</label><textarea data-field="sec" style="min-height:80px" placeholder="e.g. my blockmate is here" autofocus>${esc(state.notes[k] || '')}</textarea>
     ${pk ? `<label class="field">About ${esc(r.instructor)} (shows on all their sections)</label><textarea data-field="prof" style="min-height:80px" placeholder="e.g. strict with attendance">${esc(state.notes['p:' + pk] || '')}</textarea>
       <p class="pref-label" style="margin-top:14px">This prof</p><input type="hidden" data-field="pref" value="${pp}">
       <div class="toggles">${[['prefer', '👍 prefer'], ['neutral', 'no preference'], ['avoid', '👎 avoid']].map(([v, l]) => `<button class="tgl" data-mset="pref" data-v="${v}" aria-pressed="${pp === v}">${l}</button>`).join('')}</div>` : ''}
@@ -1726,6 +1749,9 @@ async function editNote(i) {
   setNote(k, res.sec);
   if (pk) { setNote('p:' + pk, res.prof); if (res.pref === 'neutral') delete state.profs[pk]; else state.profs[pk] = res.pref; }
   save(); renderClassList(); render(); toast('notes saved 📝');
+  if (so && (res.room || '').trim() !== mineRN) {
+    try { await roomCall('roomNote', { key: keyOf(r), text: (res.room || '').trim() }); } catch (e) { toast(e.message); }
+  }
 }
 async function pickEmoji(i) {
   const res = await openModal(`<h3>Pick an emoji for ${esc(N(i))}</h3><p>It replaces the initial everywhere.</p>
@@ -2062,7 +2088,7 @@ function exportXlsx() {
 }
 
 /* ======================= Google Sheets sync: profiles & rooms ======================= */
-const SYNC_URL = 'https://script.google.com/macros/s/AKfycbw1FL9ma3mPFCzHabz89AVlWWySAPdQiQ79iiNbKD5aOpvNmrRso0bOWw5bgeOPa762/exec'; // ← paste your Apps Script web app URL (ends in /exec) between the quotes
+const SYNC_URL = ''; // ← paste your Apps Script web app URL (ends in /exec) between the quotes
 const SY = () => state.sync;
 const syncUrl = () => SYNC_URL || SY().url || '';
 const connected = () => !!(syncUrl() && SY().me && SY().mine);
@@ -2118,7 +2144,7 @@ function mineFromLocal() {
 }
 function currentSig() {
   const sy = SY(), rc = curRoom(), me = sy.me ? sy.me.id : '';
-  return JSON.stringify([sy.room, rc ? [rc.name, rc.owner, rc.members.map(m => m.id === me ? m.id : [m.id, m.updated, m.name, m.emoji])] : 0, sy.updated, sy.tab, sy.offVer, sy.rooms]);
+  return JSON.stringify([sy.room, rc ? [rc.name, rc.owner, rc.members.map(m => m.id === me ? m.id : [m.id, m.updated, m.name, m.emoji]), rc.social ? rc.social.v : 0] : 0, sy.updated, sy.tab, sy.offVer, sy.rooms]);
 }
 function refreshFromSync(force) {
   const sig = currentSig();
@@ -2127,10 +2153,11 @@ function refreshFromSync(force) {
   materializing = true; materialize(); materializing = false;
   if (needActive) { state.active = myIdx(); needActive = false; }
   persist();
-  render(); renderRoomBar();
+  render(); renderRoomBar(); renderBadge();
   const ae = document.activeElement;
   if (!(ae && ae.matches && ae.matches('input, textarea, select'))) syncSetup();
   syncIpsReqs();
+  setTimeout(checkNudges, 50);
 }
 /* your IPS subjects follow the open tab (intersession / 1st / 2nd sem) */
 function syncIpsReqs() {
@@ -2160,7 +2187,7 @@ async function pushNow() {
   if (js === sy.lastPushed) return setSyncStatus('ok');
   pushing = true;
   try {
-    const out = await api('saveMe', { ...authBody(), pub: pubOf(sy.mine), priv: privOf(sy.mine) });
+    const out = await api('saveMe', { ...authBody(), pub: pubOf(sy.mine), priv: privOf(sy.mine), events: eventsFor(sy.lastPushed, sy.mine) });
     sy.lastPushed = js; sy.updated = out.updated; lastSig = currentSig(); persist();
     setSyncStatus(pending() ? 'saving' : 'ok');
     if (pending()) schedulePush();
@@ -2173,6 +2200,7 @@ async function pushNow() {
 function applyMe(me, force) {
   const sy = SY();
   sy.rooms = me.rooms || [];
+  if (me.hasRec !== undefined) sy.hasRec = me.hasRec;
   if (force || (me.updated > sy.updated && !pending())) {
     sy.mine = normMine({ ...me.pub, ...me.priv }); sy.updated = me.updated; sy.lastPushed = JSON.stringify(sy.mine);
   }
@@ -2276,9 +2304,11 @@ async function createProfile() {
     toast('creating your profile…');
     const out = await api('createProfile', { name, emoji: mine.emoji, pin, pub: pubOf(mine), priv: privOf(mine) });
     const sy = SY();
-    Object.assign(sy, { me: { id: out.id, token: out.token }, mine, lastPushed: JSON.stringify(mine), updated: out.updated, rooms: [], room: '', roomCache: {} });
+    Object.assign(sy, { me: { id: out.id, token: out.token }, mine, lastPushed: JSON.stringify(mine), updated: out.updated, rooms: [], room: '', roomCache: {}, hasRec: true });
     const join = pendingJoin;
-    await openModal(`<h3>You're in! ✦</h3><p>Your personal code is</p><p class="bigcode">${fmtCode(out.id)}</p><p>Save it (a screenshot works). With your PIN, it lets you sign in on another phone or laptop.</p>
+    await openModal(`<h3>You're in! ✦</h3><p>Your personal code is</p><p class="bigcode">${fmtCode(out.id)}</p><p>With your PIN, it lets you sign in on another phone or laptop.</p>
+      <p>Your recovery code, in case you forget your PIN:</p><p class="bigcode" style="font-size:22px">${esc(out.rec)}</p>
+      <p class="hint"><b>Screenshot this screen.</b> The recovery code works once and can't be shown again (you can make a new one in Setup).</p>
       <div class="row"><button class="btn small" data-choice="">${join ? 'join the room' : 'got it'}</button></div>`);
     await afterConnect();
     return true;
@@ -2303,10 +2333,31 @@ async function signIn() {
   const pr = await openModal(`<h3>Hi${who ? ' ' + esc(who) : ''}! What's your PIN?</h3>
     <input type="password" data-field="pin" maxlength="12" autofocus style="margin-top:10px">
     <p class="hint">Signing in replaces the plan on this device with your saved one.</p>
-    <div class="row"><button class="btn small" data-choice="ok">sign in</button><button class="btn small ghost" data-choice="">cancel</button></div>`);
+    <div class="row"><button class="btn small" data-choice="ok">sign in</button><button class="btn small ghost" data-choice="">cancel</button><button class="btn small link" data-choice="forgot">forgot PIN?</button></div>`);
+  if (pr && pr.choice === 'forgot') return recoverPin(id, rc);
   if (!pr || pr.choice !== 'ok') return false;
   try {
     const out = await api('login', { id, pin: pr.pin });
+    return await finishSignIn(out, rc);
+  } catch (e) { toast(e.message); return false; }
+}
+async function recoverPin(id, rc) {
+  const res = await openModal(`<h3>Reset your PIN</h3><p>Enter the recovery code you got when you made your profile (it looks like <b class="code">ABCD-EFGH-JKMN</b>).</p>
+    <input type="text" data-field="rec" placeholder="XXXX-XXXX-XXXX" autofocus style="margin-top:10px; text-transform:uppercase">
+    ${pinFields('New PIN')}
+    <p class="hint">No recovery code? Ask whoever owns the Google Sheet to delete your row in the EH Profiles tab, then make a new profile.</p>
+    <div class="row"><button class="btn small" data-choice="ok">reset PIN</button><button class="btn small ghost" data-choice="">cancel</button></div>`);
+  if (!res || res.choice !== 'ok') return false;
+  const pin = checkPin(res); if (!pin) return false;
+  try {
+    const out = await api('recover', { id, rec: res.rec, pin });
+    await openModal(`<h3>PIN reset ✦</h3><p>Your old recovery code no longer works. Here's your new one:</p><p class="bigcode" style="font-size:22px">${esc(out.rec)}</p>
+      <p class="hint"><b>Screenshot it.</b> Other devices were signed out.</p><div class="row"><button class="btn small" data-choice="">got it</button></div>`);
+    return await finishSignIn(out, rc);
+  } catch (e) { toast(e.message); return false; }
+}
+async function finishSignIn(out, rc) {
+  {
     const sy = SY();
     Object.assign(sy, { me: { id: out.me.id, token: out.token }, updated: 0, lastPushed: '', room: '', roomCache: {} });
     applyMe(out.me, true);
@@ -2314,7 +2365,16 @@ async function signIn() {
     await afterConnect();
     toast(`welcome back${sy.mine.name ? ', ' + sy.mine.name : ''} ✦`);
     return true;
-  } catch (e) { toast(e.message); return false; }
+  }
+}
+async function newRecovery() {
+  if (!(await ask('Make a new recovery code?', 'Your old recovery code stops working.', 'make new code'))) return;
+  try {
+    const out = await api('newRecovery', authBody());
+    SY().hasRec = true; persist(); syncSetup();
+    await openModal(`<h3>Your new recovery code</h3><p class="bigcode" style="font-size:22px">${esc(out.rec)}</p><p>If you forget your PIN, this resets it (together with your personal code). It works once.</p>
+      <p class="hint"><b>Screenshot it.</b> It can't be shown again.</p><div class="row"><button class="btn small" data-choice="">got it</button></div>`);
+  } catch (e) { toast(e.message); }
 }
 async function changePin() {
   const res = await openModal(`<h3>Change your PIN</h3>${pinFields('New PIN')}<p class="hint">Your other devices will be signed out.</p>
@@ -2468,6 +2528,148 @@ async function handleJoinHash(code, s) {
   if (!ok) pendingJoin = null;
 }
 
+/* ----- room extras: activity, nudges, room notes, reactions ----- */
+const REACTS = ['❤️', '😭', '🤝', '🔥', '👀'];
+const SOC = () => { const rc = connected() && curRoom(); return rc && rc.social ? rc.social : null; };
+const midOf = p => { const rc = curRoom(); return rc && rc.members[p] ? rc.members[p].id : ''; };
+const idxOfId = id => { const rc = curRoom(); return rc ? rc.members.findIndex(m => m.id === id) : -1; };
+const nameOfId = id => { const k = idxOfId(id); return k < 0 ? 'someone who left' : k === myIdx() ? 'you' : N(k); };
+const pretty = (s, x) => x ? `${s} – ${x}` : s;
+function keyParts(k) {   // "theo 13 a" → { s: "THEO 13", x: "A" }, using the class list when we can
+  const i = C && C.byKey ? C.byKey.get(k) : undefined;
+  if (i !== undefined) return { s: state.rows[i].subject, x: state.rows[i].section };
+  const t = k.toUpperCase().split(' '); return { s: t.slice(0, -1).join(' '), x: t[t.length - 1] };
+}
+function ago(t) {
+  const m = Math.round((Date.now() - t) / 60000);
+  return m < 1 ? 'just now' : m < 60 ? m + 'm ago' : m < 1440 ? Math.round(m / 60) + 'h ago' : Math.round(m / 1440) + 'd ago';
+}
+/* what changed in your picks since the last save, so friends see it in the room's activity */
+function eventsFor(prevJs, mine) {
+  if (!SY().rooms.length) return [];
+  let prev; try { prev = JSON.parse(prevJs).picks || []; } catch (e) { return []; }
+  const before = new Set(prev), after = new Set(mine.picks || []);
+  const add = [...after].filter(k => !before.has(k)).map(keyParts), del = [...before].filter(k => !after.has(k)).map(keyParts);
+  const ev = [];
+  add.forEach(a => {
+    const d = del.findIndex(x => norm(x.s) === norm(a.s));
+    if (d >= 0) { ev.push({ k: 'swap', s: a.s, x: a.x, y: del[d].x }); del.splice(d, 1); }
+    else ev.push({ k: 'pick', s: a.s, x: a.x });
+  });
+  del.forEach(d => ev.push({ k: 'drop', s: d.s, x: d.x }));
+  return ev.length > 6 ? [{ k: 'many', n: ev.length }] : ev;
+}
+function evText(e) {
+  const who = `<b>${esc(nameOfId(e.by))}</b>`, sec = esc(pretty(e.s, e.x));
+  switch (e.k) {
+    case 'pick': return `${who} picked ${sec}`;
+    case 'drop': return `${who} dropped ${sec}`;
+    case 'swap': return `${who} switched ${esc(e.s)} from ${esc(e.y)} to ${esc(e.x)}`;
+    case 'many': return `${who} changed ${e.n} picks`;
+    case 'nudge': return `${who} asked <b>${esc(nameOfId(e.to))}</b> to join ${sec} 💌`;
+    case 'yes': return `${who} joined <b>${esc(nameOfId(e.to))}</b> in ${sec} 💌`;
+  }
+  return '';
+}
+const unreadCount = () => { const so = SOC(), me = SY().me && SY().me.id; if (!so) return 0; const seen = (SY().seen || {})[SY().room] || 0; return so.feed.filter(e => e.t > seen && e.by !== me).length + so.nudges.filter(n => n.to === me && n.st === 'new').length; };
+function renderBadge() {
+  const b = $('[data-tab=compare]'); if (!b) return;
+  const n = view === 'compare' ? 0 : unreadCount();
+  b.innerHTML = 'Compare' + (n ? `<span class="badge" aria-label="${n} new">${n > 9 ? '9+' : n}</span>` : '');
+}
+let feedSeenAt = 0;
+function markFeedSeen() {
+  const so = SOC(); if (!so) return;
+  const sy = SY(); sy.seen = sy.seen || {};
+  feedSeenAt = sy.seen[sy.room] || 0;   // highlight what's new in this render
+  const last = Math.max(0, ...so.feed.map(e => e.t));
+  if (last > (sy.seen[sy.room] || 0)) { sy.seen[sy.room] = last; persist(); }
+  renderBadge();
+}
+function feedCard() {
+  const so = SOC(); if (!so) return '';
+  const me = SY().me.id;
+  const inbox = so.nudges.filter(n => n.to === me), sent = so.nudges.filter(n => n.from === me);
+  const nHtml = inbox.map(n => `<div class="nudge"><span>💌 <b>${esc(nameOfId(n.from))}</b> wants to take <b>${esc(pretty(n.s, n.x))}</b> with you</span>
+      <span class="row"><button class="btn small" data-act="nudge-yes" data-nid="${esc(n.id)}">join</button><button class="btn small ghost" data-act="nudge-no" data-nid="${esc(n.id)}">no thanks</button></span></div>`).join('')
+    + sent.map(n => `<div class="nudge" style="background:var(--surface-2)"><span>💌 waiting for <b>${esc(nameOfId(n.to))}</b> to answer about ${esc(pretty(n.s, n.x))}</span><span class="m" style="color:var(--muted); font-size:12.5px">${ago(n.t)}</span></div>`).join('');
+  const evs = so.feed.slice().reverse().filter(e => evText(e)).slice(0, 12);
+  const fHtml = evs.length ? evs.map(e => { const k = idxOfId(e.by); return `<div class="ev ${e.t > feedSeenAt && e.by !== me ? 'new' : ''}">${k >= 0 ? crest(k, 'sm') : '<span>•</span>'}<span>${evText(e)}</span><span class="m">${ago(e.t)}</span></div>`; }).join('')
+    : '<p class="hint" style="margin:0">Nothing yet. When someone in this room picks, drops or switches a section, it shows up here.</p>';
+  return `<div class="card rv feed" style="margin-bottom:20px"><h3>What's new in "${esc(curRoom().name)}"</h3>${nHtml}${fHtml}</div>`;
+}
+/* friends in this room who need this subject but aren't in this section */
+function askableFor(i) {
+  const r = state.rows[i], k = norm(r.subject), me = myIdx();
+  return people().map((_, p) => p !== me && !r.on[p] && (planHas(p, k) || C.picks[p].some(j => norm(state.rows[j].subject) === k)) ? p : -1).filter(p => p >= 0);
+}
+async function nudgeFriends(i, list) {
+  const r = state.rows[i];
+  let to = list || askableFor(i);
+  if (!to.length) return toast('Nobody else here needs this subject.');
+  if (to.length > 1) {
+    const res = await openModal(`<h3>💌 Ask who to join ${esc(rowLabel(r))}?</h3><p>They'll get a little note asking them to take this section with you.</p>
+      <div class="choice-list"><button class="choice" data-choice="all">everyone (${to.map(p => esc(N(p))).join(', ')})</button>${to.map(p => `<button class="choice" data-choice="${p}">${crest(p, 'sm')} ${esc(N(p))}</button>`).join('')}</div>
+      <div class="row"><button class="btn small ghost" data-choice="">cancel</button></div>`);
+    if (!res || !res.choice) return;
+    if (res.choice !== 'all') to = [+res.choice];
+  }
+  try {
+    for (const p of to) await roomCall('nudge', { to: midOf(p), s: r.subject, x: r.section });
+    toast(`💌 sent! ${to.map(N).join(' & ')} will see it next time they look`);
+  } catch (e) { toast(e.message); }
+}
+let nudgeOpen = false;
+async function checkNudges() {
+  const so = SOC(); if (!so || nudgeOpen || !$('#modal').classList.contains('hidden')) return;
+  const sy = SY(), me = sy.me.id; sy.asked = sy.asked || {};
+  const n = so.nudges.find(x => x.to === me && x.st === 'new' && !sy.asked[x.id]);
+  if (!n) return;
+  sy.asked[n.id] = 1; persist(); nudgeOpen = true;
+  const i = C.byKey.get(norm(n.s + ' ' + n.x)), m = myIdx();
+  const cur = i !== undefined ? state.rows.findIndex(r => r.on[m] && norm(r.subject) === norm(n.s)) : -1;
+  const cl = i !== undefined ? clashPreview(i, m).filter(x => norm(x) !== norm(n.s)) : [];
+  const res = await openModal(`<h3>💌 ${esc(nameOfId(n.from))} wants to take ${esc(pretty(n.s, n.x))} with you</h3>
+    <p>${i !== undefined ? esc(whenText(C.parsed[i], state.rows[i])) : 'This section is in another semester tab.'}</p>
+    ${cur >= 0 ? `<p class="hint">You're in section ${esc(state.rows[cur].section)} now. Joining switches you.</p>` : ''}${cl.length ? `<div class="alert"><b>⚠ Heads up</b>It would clash with ${esc(cl.join(', '))}.</div>` : ''}
+    <div class="row">${i !== undefined ? '<button class="btn small" data-choice="yes">yes, join!</button>' : ''}<button class="btn small ghost" data-choice="later">later</button><button class="btn small link" data-choice="no">no thanks</button></div>`);
+  nudgeOpen = false;
+  answerNudge(n.id, res && res.choice ? res.choice : 'later');
+}
+async function answerNudge(nid, how) {
+  const so = SOC(); if (!so) return;
+  const n = so.nudges.find(x => x.id === nid); if (!n) return;
+  if (how === 'yes') {
+    const i = C.byKey.get(norm(n.s + ' ' + n.x)), m = myIdx();
+    if (i === undefined) return toast('That section is in another semester tab. Switch tabs in Setup first.');
+    const snap = snapshot(), msgs = [];
+    setPick(i, m, true, msgs); save(); render();
+    undoable(`you're in ${pretty(n.s, n.x)} with ${nameOfId(n.from)} ✦`, snap);
+  }
+  try { await roomCall('nudgeReply', { nid, st: how === 'later' ? 'seen' : how }); } catch (e) { if (how !== 'later') toast(e.message); }
+}
+/* notes everyone in the room can see, one per person per section */
+function roomNotes(k) {
+  const so = SOC(), n = so && so.notes[k]; if (!n) return [];
+  return Object.keys(n).filter(id => idxOfId(id) >= 0).map(id => ({ who: nameOfId(id), text: n[id].text, t: n[id].t })).sort((a, b) => a.t - b.t);
+}
+const myRoomNote = k => { const so = SOC(), n = so && so.notes[k]; return n && n[SY().me.id] ? n[SY().me.id].text : ''; };
+function reactsOn(p, k) {
+  const so = SOC(), me = SY().me.id, x = (so.reacts[midOf(p) + '|' + k]) || {}, by = {};
+  Object.keys(x).filter(id => idxOfId(id) >= 0).forEach(id => { (by[x[id]] = by[x[id]] || []).push(nameOfId(id)); });
+  return { mine: x[me] || '', list: Object.keys(by).map(e => ({ e, who: by[e] })) };
+}
+async function reactTo(i, e) {
+  const a = state.active;
+  if (a === myIdx()) return;
+  try { await roomCall('react', { target: midOf(a), key: keyOf(state.rows[i]), e }); } catch (err) { toast(err.message); }
+}
+async function roomCall(a, body) {
+  const sy = SY(), out = await api(a, { ...authBody(), code: sy.room, ...body });
+  if (out.room) { sy.roomCache[out.room.code] = out.room; persist(); refreshFromSync(true); }
+  return out;
+}
+
 /* ----- sync UI ----- */
 function measureBars() { const t = $('.tabbar'); if (t) document.documentElement.style.setProperty('--tabh', t.offsetHeight + 'px'); }
 function renderRoomBar() {
@@ -2507,9 +2709,10 @@ function renderSyncCard() {
   el.innerHTML = head('Your rooms', 'Your plan is the same in every room. Switch rooms at the top of the page.') +
     `<div>${sy.rooms.length ? sy.rooms.map(roomItem).join('') : '<p class="hint" style="margin:0 0 10px">No rooms yet. Make one and invite your friends, or join theirs with a code.</p>'}</div>
     <div class="row" style="margin-top:0"><button class="btn small" data-act="room-new">+ new room</button><button class="btn small ghost" data-act="room-join">join with a code</button></div>
-    <details><summary>your account</summary>
+    <details ${sy.hasRec === false ? 'open' : ''}><summary>your account${sy.hasRec === false ? ' · <span style="color:var(--bad)">make a recovery code</span>' : ''}</summary>
       <p class="hint">Your personal code is <b class="code">${fmtCode(sy.me.id)}</b>. Use it with your PIN to sign in on another device.</p>
-      <div class="row"><button class="btn small ghost" data-act="sync-pin">change PIN</button><button class="btn small ghost" data-act="sync-signout">sign out on this device</button></div>
+      ${sy.hasRec === false ? '<div class="alert"><b>🔑 No recovery code yet</b>Make one so you can reset your PIN if you forget it.</div>' : ''}
+      <div class="row"><button class="btn small ghost" data-act="sync-pin">change PIN</button><button class="btn small ghost" data-act="sync-rec">🔑 new recovery code</button><button class="btn small ghost" data-act="sync-signout">sign out on this device</button></div>
     </details>`;
 }
 function roomItem(r) {
@@ -2708,6 +2911,11 @@ document.addEventListener('click', async e => {
     case 'sync-create': return createProfile();
     case 'sync-signin': return signIn();
     case 'sync-pin': return changePin();
+    case 'sync-rec': return newRecovery();
+    case 'nudge': return nudgeFriends(i);
+    case 'nudge-ask': return nudgeFriends(i, el.dataset.people.split(',').map(Number));
+    case 'nudge-yes': case 'nudge-no': case 'nudge-later': return answerNudge(el.dataset.nid, act.slice(6));
+    case 'react': return reactTo(i, el.dataset.e);
     case 'sync-signout': return (await ask('Sign out on this device?', 'Your plan stays saved in the Google Sheet. Sign in again anytime with your personal code and PIN.', 'sign out')) && signOutDevice('Signed out. Your plan is still saved in the sheet.');
     case 'room-new': return newRoom();
     case 'room-join': return joinRoomPrompt();
