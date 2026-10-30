@@ -908,7 +908,7 @@ const syOf = name => { const m = String(name || '').match(/(\d{2})\s*[-–]\s*\d
 function refreshReqs() {
   people().forEach(p => {
     const b = ipsPick(p);
-    if (b) { p.reqs = reqsFromBlock(b); p.ips.pick = `${b.y ? b.y + ' · ' : ''}${TERM_LABEL[b.t]}`; }
+    if (b) { p.ips.pick = `${b.y ? b.y + ' · ' : ''}${TERM_LABEL[b.t]}`; const ed = p.ips.edits && p.ips.edits[p.ips.pick]; p.reqs = ed ? [...ed] : reqsFromBlock(b); }
     else if (p.ipsAoa) p.reqs = extractRange(p.ipsAoa, state.ranges[semKey()][p.side]);
   });
 }
@@ -1271,12 +1271,13 @@ function renderPeople() {
         <span class="tag">${COLORS[i].hue}</span>${!connected() && nP() > 1 ? `<button class="icon-btn" data-act="remove-person" data-i="${i}" title="remove" aria-label="remove ${esc(N(i))}">✕</button>` : ''}</div>
       <label class="field">IPS subjects this semester · one per line</label>
       <textarea class="ruled preqs" data-i="${i}" placeholder="MATH 21&#10;ENG 12&#10;IE 2&#10;Management Elective&#10;…">${esc(p.reqs.join('\n'))}</textarea>
-      ${p.ipsAoa || p.ips ? `<div class="ipsline">📜 from ${esc(p.ipsName || 'your IPS')}${p.ips && p.ips.pick ? ` · <b>${esc(p.ips.pick)}</b> (matches the open tab)` : ''} · <select data-side="${i}"><option value="L" ${p.side === 'L' ? 'selected' : ''}>left program</option><option value="R" ${p.side === 'R' ? 'selected' : ''}>right program</option></select></div>` : ''}
+      ${p.ipsAoa || p.ips ? `<div class="ipsline">📜 from ${esc(p.ipsName || 'your IPS')}${p.ips && p.ips.pick ? ` · <b>${esc(p.ips.pick)}</b> (matches the open tab)` : ''}${p.ips && p.ips.edits && p.ips.edits[p.ips.pick] ? ` · edited by hand <button class="btn link" data-act="ips-reset" data-i="${i}">↺ use the IPS list</button>` : ''}${p.ipsAoa || uniq(((p.ips && p.ips.blocks) || []).map(b => b.c)).length > 1 ? ` · <select data-side="${i}"><option value="L" ${p.side === 'L' ? 'selected' : ''}>left program</option><option value="R" ${p.side === 'R' ? 'selected' : ''}>right program</option></select>` : ''}</div>` : ''}
       <label class="field">Busy times · org meetings, work, commute</label>
       <div class="chiplist">${p.busy.map((b, k) => `<span class="bchip">${esc(b.label)} · ${esc(busyText(b))}<button data-act="del-busy" data-i="${i}" data-b="${k}" aria-label="remove">✕</button></span>`).join('')}
         <button class="btn small ghost" data-act="add-busy" data-i="${i}">+ busy time</button></div>
       <div class="person-actions">
-        <label class="filelink">📜 ${p.ipsAoa || p.ips ? 'use a different IPS file' : 'import subjects from an IPS file'}<input type="file" data-ips="${i}" accept=".xlsx,.xls,.csv"></label>
+        <button class="btn small ${p.ips ? 'ghost' : 'soft'}" data-act="ips-paste" data-i="${i}">📋 ${p.ips ? 'paste a new IPS' : 'paste your whole IPS'}</button>
+        <label class="filelink">📜 ${p.ipsAoa || p.ips ? 'or use an IPS file' : 'or upload an IPS file'}<input type="file" data-ips="${i}" accept=".xlsx,.xls,.csv"></label>
         ${connected() ? '' : `<button class="btn link" data-act="share" data-i="${i}">🔗 share this plan</button>`}
       </div>
     </div>`).join('');
@@ -2025,10 +2026,42 @@ function startEdit(i) {
   setTimeout(() => $('#fSubject').scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
 }
 
+/* A whole IPS pasted as text: copied from a sheet or web page (tab-separated), or plain text with spaces */
+function parseIpsText(text) {
+  return String(text || '').replace(/\r/g, '').split('\n').map(line => {
+    if (line.includes('\t')) return line.split('\t').map(x => x.trim());
+    const t = line.trim();
+    const m = t.match(/^([A-Za-z]{2,8}\s+(?:\d[\w.]*|Elective))\s+(.+?)(?:\s+(\d+(?:\.\d+)?))?$/i);   // "ECON 117.01 Intro to Econometrics 3"
+    if (m && !/^(first|second)\s+semester$/i.test(t)) return [m[1], m[2], m[3] || ''];
+    return t.split(/\s{2,}/).map(x => x.trim());
+  });
+}
+async function pasteIps(i) {
+  const p = state.people[i];
+  const res = await openModal(`<h3>📋 Paste your whole IPS</h3><p>Copy your entire IPS (every year) and paste it here. The site keeps all of it and fills in the right semester whenever you switch tabs, so you only do this once.</p>
+    <textarea data-field="ips" style="min-height:220px; margin-top:10px; font-size:13px; white-space:pre" placeholder="THIRD YEAR&#10;First Semester&#10;ECON 111&#9;Intermediate Microeconomic Theory&#9;3&#10;…" autofocus></textarea>
+    <p class="hint">Works best copied from a spreadsheet or web page. Keep the year and semester headings (like "THIRD YEAR" and "First Semester").</p>
+    <div class="row"><button class="btn small" data-choice="ok">use this IPS</button><button class="btn small ghost" data-choice="">cancel</button></div>`);
+  if (!res || res.choice !== 'ok' || !(res.ips || '').trim()) return;
+  const blocks = ipsBlocks(parseIpsText(res.ips));
+  if (!blocks.length) return toast('Couldn\'t find any semesters. Make sure the headings like "First Semester" are included.');
+  const snap = snapshot();
+  Object.assign(p, { ipsAoa: null, ips: { blocks, pick: '' }, ipsName: 'your pasted IPS', side: 'L' });
+  refreshReqs(); save(); syncSetup(); render();
+  if (connected() && !SY().tabPicked) loadOfferings('').then(() => { refreshReqs(); save(); syncSetup(); render(); }).catch(() => {});   // open the semester that matches
+  const years = uniq(blocks.map(b => b.y).filter(Boolean));
+  undoable(`IPS saved ✦ ${blocks.length} semesters${years.length ? ' across ' + years.length + ' years' : ''}${p.ips.pick ? ' · showing ' + p.ips.pick : ''}`, snap);
+}
+
 $('#peopleList').addEventListener('input', e => {
   const i = +e.target.dataset.i;
   if (e.target.matches('.pname')) { state.people[i].name = e.target.value.trim(); if (!state.people[i].emoji) e.target.parentElement.querySelector('.crest').textContent = N(i)[0].toUpperCase(); save(); }
-  else if (e.target.matches('.preqs')) { state.people[i].reqs = lines(e.target.value); state.people[i].ipsAoa = null; state.people[i].ips = null; save(); }
+  else if (e.target.matches('.preqs')) {
+    const p = state.people[i]; p.reqs = lines(e.target.value);
+    if (p.ips && p.ips.pick) { p.ips.edits = p.ips.edits || {}; p.ips.edits[p.ips.pick] = [...p.reqs]; }   // a hand edit for this term only; the rest of the IPS stays
+    else { p.ipsAoa = null; p.ips = null; }
+    save();
+  }
 });
 $('#peopleList').addEventListener('change', async e => {
   if (e.target.matches('[data-side]')) { const i = +e.target.dataset.side; state.people[i].side = e.target.value; refreshReqs(); save(); syncSetup(); render(); }
@@ -2088,7 +2121,7 @@ function exportXlsx() {
 }
 
 /* ======================= Google Sheets sync: profiles & rooms ======================= */
-const SYNC_URL = 'https://script.google.com/macros/s/AKfycbw1FL9ma3mPFCzHabz89AVlWWySAPdQiQ79iiNbKD5aOpvNmrRso0bOWw5bgeOPa762/exec'; // ← paste your Apps Script web app URL (ends in /exec) between the quotes
+const SYNC_URL = ''; // ← paste your Apps Script web app URL (ends in /exec) between the quotes
 const SY = () => state.sync;
 const syncUrl = () => SYNC_URL || SY().url || '';
 const connected = () => !!(syncUrl() && SY().me && SY().mine);
@@ -2259,7 +2292,7 @@ async function loadOfferings(tab, quiet) {
   if (!tab && !sy.tabPicked && out.subjects) { const best = bestTab(out); if (best !== out.sheet) out = await api('offerings', { sheet: best }); }
   sy.tabs = out.tabs; sy.tab = out.sheet; sy.offAt = Date.now();
   const rows = parseScheduleSheet(out.aoa).map(r => ({ ...r, on: [false, false, false, false] }));
-  const sig = JSON.stringify([rows.map(rowArr), out.electives || null]);
+  const sig = JSON.stringify([out.sheet, rows.map(rowArr), out.electives || null]);   // the tab name counts too: two empty tabs are still different semesters
   if (sig !== sy.offSig) { sy.offSig = sig; sy.offVer++; state.rows = rows; state.sheetName = out.sheet; state.electives = out.electives || null; }
   if (!quiet) refreshFromSync(true);
 }
@@ -2912,6 +2945,11 @@ document.addEventListener('click', async e => {
     case 'sync-signin': return signIn();
     case 'sync-pin': return changePin();
     case 'sync-rec': return newRecovery();
+    case 'ips-paste': return canEdit(i) && pasteIps(i);
+    case 'ips-reset': {
+      const p = state.people[i]; if (!canEdit(i) || !p.ips || !p.ips.edits) return;
+      delete p.ips.edits[p.ips.pick]; refreshReqs(); save(); syncSetup(); render(); return toast(`back to your IPS list for ${p.ips.pick}`);
+    }
     case 'nudge': return nudgeFriends(i);
     case 'nudge-ask': return nudgeFriends(i, el.dataset.people.split(',').map(Number));
     case 'nudge-yes': case 'nudge-no': case 'nudge-later': return answerNudge(el.dataset.nid, act.slice(6));
