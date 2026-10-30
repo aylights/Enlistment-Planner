@@ -630,7 +630,7 @@ const CONFIG = {
   RANGES: { SEM_1: { L: 'A10:A15', R: 'E10:E15' }, SEM_2: { L: 'A18:A25', R: 'E18:E24' } },
   DAY_START: 7, DAY_END: 21, HOUR_PX: 44, MAX_PEOPLE: 4, BUILD_CAP: 4000,
   WALK_MIN: 15,              // back-to-back classes in different buildings with less than this many minutes → warning
-  LUNCH: [660, 840, 45]      // a 45-minute break somewhere between 11:00 and 14:00
+  STRAIGHT: [3, 30]          // warn at 3+ classes in a row, where "in a row" means less than 30 minutes between them
 };
 const COLORS = [
   { hue: 'lilac', c: '#7c5cc4', cs: '#d9d2e9', cd: '#4b3d75' },
@@ -678,7 +678,7 @@ function crest(i, cls = '') {
 /* ======================= state ======================= */
 const STORE = 'enlistmentHub.v4';
 const newPerson = () => ({ name: '', emoji: '', reqs: [], ipsAoa: null, ipsName: '', ips: null, side: 'L', backups: {}, stars: [], busy: [], drafts: [], slots: {} });
-const BUILD_DEFAULTS = { noSat: false, earliest: 7, latest: 0, keep: false, sort: 'days', maxHours: 0, maxRow: 0, freeDay: false, lunch: false, skipAvoid: true, mode: 'solo', together: [0, 1, 2, 3] };
+const BUILD_DEFAULTS = { noSat: false, earliest: 7, latest: 0, keep: false, sort: 'days', maxHours: 0, maxRow: 0, freeDay: false, skipAvoid: true, mode: 'solo', together: [0, 1, 2, 3] };
 const freshSync = () => ({ url: '', me: null, mine: null, rooms: [], room: '', roomCache: {}, tab: '', tabs: [], tabPicked: false, offAt: 0, offSig: '', offVer: 0, updated: 0, lastPushed: '', seen: {}, asked: {}, hasRec: true });
 function freshState() {
   return { people: [newPerson()], rows: [], sheetName: '', sheetUrl: '', sem: 'auto', ranges: clone(CONFIG.RANGES), active: 0,
@@ -1183,16 +1183,30 @@ function hopsOf(days) {
   } });
   return out;
 }
-function noLunchDays(days, busy) {
-  const [W0, W1, need] = CONFIG.LUNCH;
-  return days.map((l, d) => {
-    if (!l.length) return -1;
-    const iv = [...l.map(x => [x.s, x.e]), ...busy.filter(b => b.days.includes(d)).map(b => [b.s, b.e])].filter(([s, e]) => s < W1 && e > W0).sort((a, b) => a[0] - b[0]);
-    if (!iv.length) return -1;
-    let t = W0;
-    for (const [s, e] of iv) { if (s - t >= need) return -1; t = Math.max(t, e); }
-    return W1 - t >= need ? -1 : d;
-  }).filter(d => d >= 0);
+/* Stretches of back-to-back classes (and busy times) with no real break, e.g. 3 classes straight */
+function straightRuns(days, busy) {
+  const [N, GAP] = CONFIG.STRAIGHT, out = [];
+  days.forEach((l, d) => {
+    if (!l.length) return;
+    const items = [...l.map(x => ({ s: x.s, e: x.e, t: state.rows[x.i].subject })), ...busy.filter(b => b.days.includes(d)).map(b => ({ s: b.s, e: b.e, t: b.label || 'busy' }))].sort((a, b) => a.s - b.s);
+    let run = [items[0]];
+    const flush = () => { if (run.length >= N) out.push({ d, items: run }); };
+    for (let k = 1; k < items.length; k++) {
+      if (items[k].s - Math.max(...run.map(x => x.e)) < GAP) run.push(items[k]); else { flush(); run = [items[k]]; }
+    }
+    flush();
+  });
+  return out;
+}
+const hrs = m => { const h = m / 60; return (Number.isInteger(h) ? h : h.toFixed(1).replace(/\.0$/, '')) + (h === 1 ? ' hour' : ' hours'); };
+function straightText(runs) {
+  const byText = new Map();
+  runs.forEach(r => {
+    const s0 = r.items[0].s, e0 = Math.max(...r.items.map(x => x.e));
+    const t = `${r.items.map(x => `${esc(x.t)} (${fmtRange(x.s, x.e)})`).join(' → ')} · ${hrs(e0 - s0)} with no time to eat`;
+    byText.set(t, [...(byText.get(t) || []), DAY_SHORT[r.d]]);
+  });
+  return [...byText].map(([t, ds]) => `${ds.join('/')}: ${t}`).join('<br>');
 }
 function fixesFor(p) {
   const clashing = C.picks[p].filter(i => C.conf[i][p].length);
@@ -1316,12 +1330,13 @@ function renderPick() {
   const a = state.active, stage = $('#pickStage'), list = $('#pickList'), P = people()[a];
   const reqs = uniq(P.reqs);
   const pr = progressOf(a), fx = fixesFor(a);
-  const days = dayLists(C.picks[a]), hops = hopsOf(days), noLunch = noLunchDays(days, P.busy);
+  const days = dayLists(C.picks[a]), hops = hopsOf(days), runs = straightRuns(days, P.busy);
   let alerts = '';
   if (fx.clashing) alerts += `<div class="alert bad"><b>⚠ ${fx.clashing} section${fx.clashing > 1 ? 's' : ''} clashing</b>${fx.fixes.length ? 'Quick fix' + (fx.fixes.length > 1 ? 'es (any one may do it)' : '') + ':' : 'No single swap fixes it.'}
     <div class="row">${fx.fixes.map(f => `<button class="btn small" data-act="fix" data-from="${f.from}" data-to="${f.to}">move ${esc(state.rows[f.from].subject)} → ${esc(state.rows[f.to].section)}</button>`).join('')}${fx.fixes.length ? '' : '<button class="btn small soft" data-go="build">try Auto-build</button>'}</div></div>`;
   if (hops.length) alerts += `<div class="alert"><b>🚶 Tight walk${hops.length > 1 ? 's' : ''}</b>${hops.map(h => `${DAY_SHORT[h.d]}: ${esc(state.rows[h.a].subject)} (${esc(h.x)}) → ${esc(state.rows[h.b].subject)} (${esc(h.y)}) with ${h.gap ? h.gap + ' min' : 'no time'} to walk`).join('<br>')}</div>`;
-  if (noLunch.length) alerts += `<div class="alert"><b>🍱 No lunch break</b>No free ${CONFIG.LUNCH[2]} minutes between 11am and 2pm on ${noLunch.map(d => DAY_SHORT[d]).join(', ')}.</div>`;
+  if (runs.length && !state.hideStraight) alerts += `<div class="alert"><b>😵 ${Math.max(...runs.map(r => r.items.length))} classes straight on ${uniq(runs.map(r => DAY_SHORT[r.d])).join(', ')}</b>${straightText(runs)}
+    <div class="row"><button class="btn small ghost" data-act="hide-straight">I'm fine with it · hide this</button></div></div>`;
   stage.innerHTML = `<div class="stage-head"><div><div class="stage-title">${N(a) === 'You' ? 'Your' : esc(N(a)) + '\'s'} week</div><div class="stage-sub">${C.picks[a].length ? 'live preview · shaded = busy times' : 'picks show up here as you tap'}</div></div>${crest(a, 'lg')}</div>
     <div class="mini">${miniWeek(blocksFor(a, C.picks[a]), window.innerWidth < 900 ? 180 : 230)}</div>
     <div class="stats">
@@ -1490,11 +1505,11 @@ function scoreOf(set, p) {
   });
   const friends = set.filter(i => state.rows[i].on.some((v, q) => v && q !== p && q < nP())).length;
   const fav = set.reduce((s, i) => s + favOf(i, p), 0);
-  return { set, days: nDays, gaps, first, maxDay, maxRow, freeWeekday, friends, fav, hops: hopsOf(days).length, lunchBad: noLunchDays(days, people()[p].busy).length };
+  return { set, days: nDays, gaps, first, maxDay, maxRow, freeWeekday, friends, fav, hops: hopsOf(days).length };
 }
 function passesShape(o) {
   const b = state.build;
-  return !(b.maxHours && o.maxDay > b.maxHours * 60) && !(b.maxRow && o.maxRow > b.maxRow) && !(b.freeDay && !o.freeWeekday) && !(b.lunch && o.lunchBad);
+  return !(b.maxHours && o.maxDay > b.maxHours * 60) && !(b.maxRow && o.maxRow > b.maxRow) && !(b.freeDay && !o.freeWeekday);
 }
 function sortOptions(list) {
   const tie = (a, b) => b.fav - a.fav || a.hops - b.hops || a.gaps - b.gaps;
@@ -1522,8 +1537,8 @@ function renderBuild() {
       <div><p class="pref-label">Earliest class</p><div class="toggles">${[7, 8, 9, 10].map(h => tg('earliest', h, h === 7 ? 'any' : `${h}am or later`)).join('')}</div></div>
       <div><p class="pref-label">Done by</p><div class="toggles">${[0, 17, 18, 19].map(h => tg('latest', h, h ? `${h - 12}pm` : 'any')).join('')}</div></div>
       <div><p class="pref-label">Class hours per day</p><div class="toggles">${[0, 4, 5, 6].map(h => tg('maxHours', h, h ? `max ${h}h` : 'any')).join('')}</div></div>
-      <div><p class="pref-label">Classes in a row</p><div class="toggles">${[0, 2, 3].map(h => tg('maxRow', h, h ? `max ${h}` : 'any')).join('')}</div></div>
-      <div><p class="pref-label">Day shape</p><div class="toggles">${tg('freeDay', true, '🌿 one weekday free')}${tg('lunch', true, '🍱 keep a lunch break')}</div></div>
+      <div><p class="pref-label">Classes in a row · time to eat</p><div class="toggles">${[0, 2, 3].map(h => tg('maxRow', h, h ? `max ${h}` : 'any')).join('')}</div></div>
+      <div><p class="pref-label">Day shape</p><div class="toggles">${tg('freeDay', true, '🌿 one weekday free')}${state.hideStraight ? `<button class="btn link" data-act="show-straight" title="show the classes-straight reminder in Pick again">show "classes straight" reminders</button>` : ''}</div></div>
       <div><p class="pref-label">Profs & picks</p><div class="toggles">${tg('skipAvoid', true, '👎 skip avoided profs')}${tg('keep', true, 'keep sections already picked')}</div></div>
       <div><p class="pref-label">Sort by</p><div class="toggles">${tg('sort', 'days', 'fewest days')}${tg('sort', 'gaps', 'shortest breaks')}${tg('sort', 'late', 'latest start')}${tg('sort', 'fav', '★ favorites')}${nP() > 1 && !together ? tg('sort', 'friends', 'most with friends') : ''}</div></div>
     </div>`;
@@ -2121,7 +2136,7 @@ function exportXlsx() {
 }
 
 /* ======================= Google Sheets sync: profiles & rooms ======================= */
-const SYNC_URL = 'https://script.google.com/macros/s/AKfycbw1FL9ma3mPFCzHabz89AVlWWySAPdQiQ79iiNbKD5aOpvNmrRso0bOWw5bgeOPa762/exec'; // ← paste your Apps Script web app URL (ends in /exec) between the quotes
+const SYNC_URL = ''; // ← paste your Apps Script web app URL (ends in /exec) between the quotes
 const SY = () => state.sync;
 const syncUrl = () => SYNC_URL || SY().url || '';
 const connected = () => !!(syncUrl() && SY().me && SY().mine);
@@ -2897,7 +2912,7 @@ document.addEventListener('click', async e => {
       const k = el.dataset.k, v = el.dataset.v;
       const val = v === 'true' ? true : v === 'false' ? false : isNaN(+v) ? v : +v;
       // on/off toggles (true-only buttons) flip when pressed again
-      state.build[k] = (typeof val === 'boolean' && state.build[k] === val && ['freeDay', 'lunch', 'skipAvoid', 'keep'].includes(k)) ? !val : val;
+      state.build[k] = (typeof val === 'boolean' && state.build[k] === val && ['freeDay', 'skipAvoid', 'keep'].includes(k)) ? !val : val;
       buildShown = 12; save(); return render();
     }
     case 'tog-person': {
@@ -2945,6 +2960,8 @@ document.addEventListener('click', async e => {
     case 'sync-signin': return signIn();
     case 'sync-pin': return changePin();
     case 'sync-rec': return newRecovery();
+    case 'show-straight': state.hideStraight = false; save(); render(); return toast('"classes straight" reminders are back');
+    case 'hide-straight': state.hideStraight = true; save(); render(); return toast('hidden · turn it back on in Auto-build', { label: 'undo', fn: () => { state.hideStraight = false; save(); render(); } });
     case 'ips-paste': return canEdit(i) && pasteIps(i);
     case 'ips-reset': {
       const p = state.people[i]; if (!canEdit(i) || !p.ips || !p.ips.edits) return;
