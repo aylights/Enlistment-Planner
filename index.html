@@ -260,6 +260,13 @@
   .flag.bad { background: var(--bad-soft); color: var(--bad); }
   .flag.plan { background: var(--note); color: var(--ink); font-family: var(--hand); font-size: 18px; padding: 0 9px; margin: 0; transform: rotate(-3deg); }
   .cardfoot { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+  .profbtn { border: none; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+  .profbtn:hover { color: var(--accent); }
+  .fitchip { font-size: 12px; font-weight: 700; border-radius: 999px; padding: 1px 8px; margin-left: 6px; white-space: nowrap; background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
+  .fitchip.low { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+  .fitchip.none { background: var(--bad-soft); color: var(--bad); border-color: transparent; }
+  .lanekey { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 10px; }
+  .lanekey span { font-size: 13px; font-weight: 700; border-radius: 999px; padding: 3px 10px; background: var(--cs); color: var(--cd); border: 1.5px solid var(--c); }
   .cardnote.room { background: var(--stage); transform: rotate(.6deg); font-size: 17px; }
   .reacts { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
   .reacts span { font-size: 12.5px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; color: var(--muted); font-weight: 700; }
@@ -548,7 +555,8 @@
               <button data-f="picked" aria-pressed="false">picked</button>
               <button data-f="starred" aria-pressed="false">★</button>
             </div>
-            <input type="text" id="search" placeholder="🔎 subject, section, prof">
+            <div class="seg" role="group"><button id="fitsBtn" aria-pressed="false" title="hide sections that clash with what's already picked or with busy times">✓ only what fits</button></div>
+            <input type="text" id="search" placeholder="🔎 subject, prof, or a time like tue 2pm">
           </div>
           <div id="pickList"></div>
         </div>
@@ -587,6 +595,7 @@
           <button class="btn small ghost" data-act="save-image-week">📸 save as image</button>
         </div>
       </div>
+      <div id="draftBar"></div>
       <div id="weekGrid"></div>
       <div id="slotPanel"></div>
       <div class="wstats" id="weekStats"></div>
@@ -677,7 +686,7 @@ function crest(i, cls = '') {
 
 /* ======================= state ======================= */
 const STORE = 'enlistmentHub.v4';
-const newPerson = () => ({ name: '', emoji: '', reqs: [], ipsAoa: null, ipsName: '', ips: null, side: 'L', backups: {}, stars: [], busy: [], drafts: [], slots: {} });
+const newPerson = () => ({ name: '', emoji: '', reqs: [], ipsAoa: null, ipsName: '', ips: null, side: 'L', backups: {}, stars: [], busy: [], drafts: [], slots: {}, locks: [] });
 const BUILD_DEFAULTS = { noSat: false, earliest: 7, latest: 0, keep: false, sort: 'days', maxHours: 0, maxRow: 0, freeDay: false, skipAvoid: true, mode: 'solo', together: [0, 1, 2, 3] };
 const freshSync = () => ({ url: '', me: null, mine: null, rooms: [], room: '', roomCache: {}, tab: '', tabs: [], tabPicked: false, offAt: 0, offSig: '', offVer: 0, updated: 0, lastPushed: '', seen: {}, asked: {}, hasRec: true });
 function freshState() {
@@ -1128,6 +1137,7 @@ function setPick(i, p, val, msgs) {
   const r = state.rows[i];
   if (!!r.on[p] === val) return;
   r.on[p] = val;
+  if (!val && people()[p].locks.includes(keyOf(r))) people()[p].locks = people()[p].locks.filter(k => k !== keyOf(r));
   if (val) {
     removeBackup(p, i);
     state.rows.forEach((o, k) => { if (k !== i && o.on[p] && norm(o.subject) === norm(r.subject)) { setPick(k, p, false, msgs); msgs.push(`switched ${r.subject} to ${r.section}`); } });
@@ -1157,6 +1167,14 @@ function toggleBackup(i, p) {
   else if (list.length >= 2) return toast('Plan B and C are full. Remove one first.');
   else { b[s] = [...list, k]; toast(`${rowLabel(r)} is now ${poss(p)} Plan ${'BC'[list.length]}`); }
   save(); render();
+}
+const isLocked = (i, p) => (people()[p].locks || []).includes(keyOf(state.rows[i]));
+function toggleLock(i, p) {
+  if (!canEdit(p)) return;
+  const k = keyOf(state.rows[i]), P = people()[p];
+  P.locks = P.locks.includes(k) ? P.locks.filter(x => x !== k) : [...P.locks, k];
+  save(); render();
+  toast(P.locks.includes(k) ? `🔒 ${rowLabel(state.rows[i])} locked · Auto-build always keeps it` : `🔓 unlocked ${rowLabel(state.rows[i])}`);
 }
 const isStar = (i, p) => people()[p].stars.includes(keyOf(state.rows[i]));
 function toggleStar(i, p) {
@@ -1221,8 +1239,10 @@ function fixesFor(p) {
 }
 
 /* ======================= mini week ======================= */
+/* The grid runs to half past the last hour (9:30pm by default) so a class ending at 9pm sits inside it with the 9pm line showing */
+const gridEnd = () => { let m = CONFIG.DAY_END * 60; (state.rows || []).forEach((r, i) => C && C.parsed && C.parsed[i] && C.parsed[i].forEach(ps => { m = Math.max(m, ps.e); })); return Math.ceil(m / 60) + .5; };
 function miniWeek(blocks, h = 260) {
-  const S = CONFIG.DAY_START, E = CONFIG.DAY_END, span = (E - S) * 60;
+  const S = CONFIG.DAY_START, E = gridEnd(), span = (E - S) * 60;
   const cols = DAY_SHORT.map(() => []);
   blocks.forEach((b, n) => cols[b.day].push(`<div class="b${b.clash ? ' clash' : ''}${b.busy ? ' busy' : ''}" style="${b.style}; top:${(b.s - S * 60) / span * 100}%; height:${Math.max((b.e - b.s) / span * 100, 4)}%;${b.lanes > 1 ? ` left:${2 + b.lane * (96 / b.lanes)}%; right:auto; width:${96 / b.lanes - 3}%;` : ''} --d:${(n * .04).toFixed(2)}s">${esc(b.label || '')}</div>`));
   let axis = '';
@@ -1330,11 +1350,10 @@ function renderPick() {
   const a = state.active, stage = $('#pickStage'), list = $('#pickList'), P = people()[a];
   const reqs = uniq(P.reqs);
   const pr = progressOf(a), fx = fixesFor(a);
-  const days = dayLists(C.picks[a]), hops = hopsOf(days), runs = straightRuns(days, P.busy);
+  const days = dayLists(C.picks[a]), runs = straightRuns(days, P.busy);
   let alerts = '';
   if (fx.clashing) alerts += `<div class="alert bad"><b>⚠ ${fx.clashing} section${fx.clashing > 1 ? 's' : ''} clashing</b>${fx.fixes.length ? 'Quick fix' + (fx.fixes.length > 1 ? 'es (any one may do it)' : '') + ':' : 'No single swap fixes it.'}
     <div class="row">${fx.fixes.map(f => `<button class="btn small" data-act="fix" data-from="${f.from}" data-to="${f.to}">move ${esc(state.rows[f.from].subject)} → ${esc(state.rows[f.to].section)}</button>`).join('')}${fx.fixes.length ? '' : '<button class="btn small soft" data-go="build">try Auto-build</button>'}</div></div>`;
-  if (hops.length) alerts += `<div class="alert"><b>🚶 Tight walk${hops.length > 1 ? 's' : ''}</b>${hops.map(h => `${DAY_SHORT[h.d]}: ${esc(state.rows[h.a].subject)} (${esc(h.x)}) → ${esc(state.rows[h.b].subject)} (${esc(h.y)}) with ${h.gap ? h.gap + ' min' : 'no time'} to walk`).join('<br>')}</div>`;
   if (runs.length && !state.hideStraight) alerts += `<div class="alert"><b>😵 ${Math.max(...runs.map(r => r.items.length))} classes straight on ${uniq(runs.map(r => DAY_SHORT[r.d])).join(', ')}</b>${straightText(runs)}
     <div class="row"><button class="btn small ghost" data-act="hide-straight">I'm fine with it · hide this</button></div></div>`;
   stage.innerHTML = `<div class="stage-head"><div><div class="stage-title">${N(a) === 'You' ? 'Your' : esc(N(a)) + '\'s'} week</div><div class="stage-sub">${C.picks[a].length ? 'live preview · shaded = busy times' : 'picks show up here as you tap'}</div></div>${crest(a, 'lg')}</div>
@@ -1353,8 +1372,9 @@ function renderPick() {
   let f = state.pickFilter;
   if (f === 'need' && !reqs.length) f = 'all';
   $$('#pickFilter button').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === f));
+  $('#fitsBtn').setAttribute('aria-pressed', !!state.fitsOnly);
   $('#pickFilter [data-f=need]').textContent = N(a) === 'You' ? 'my subjects' : `${N(a)}'s subjects`;
-  const q = norm($('#search').value);
+  const q = norm($('#search').value), tq = timeQuery(q);
   const groups = new Map();
   state.rows.forEach((r, i) => { const k = norm(r.subject); if (!groups.has(k)) groups.set(k, { name: r.subject, idx: [] }); groups.get(k).idx.push(i); });
   const plan = C.plans[a];
@@ -1368,7 +1388,7 @@ function renderPick() {
     const slot = item && item.kind === 'slot';
     const chooseBtn = slot && canEditQ(a) ? `<button class="bk" data-act="slot-choose" data-req="${esc(item.req)}">${item.subject ? 'change' : 'choose a subject'}</button>` : '';
     if (slot && !item.subject) {   // an elective with nothing chosen yet
-      if (q && !norm(item.req).includes(q)) return;
+      if (q && (tq || !norm(item.req).includes(q))) return;
       const opts = eligibleFor(a, item).length;
       html += `<div class="subj rv" style="--d:${Math.min(n++ * .04, .4)}s"><div class="subj-head"><h4>${esc(slotLabel(item.req))}</h4><span class="pillst st-missing">elective · still needed</span></div>
         <div class="secs"><div class="sec-card" role="button" tabindex="0" data-act="slot-choose" data-req="${esc(item.req)}" style="border-style:dashed">
@@ -1378,9 +1398,11 @@ function renderPick() {
       return;
     }
     const g = groups.get(k), subj = g ? g.name : item.subject;
-    let idx = g ? g.idx.filter(i => { const r = state.rows[i]; return !q || norm([r.subject, r.section, r.instructor, r.room, r.days].join(' ')).includes(q) || (slot && norm(item.req).includes(q)); }) : [];
+    let idx = g ? g.idx.filter(i => { const r = state.rows[i]; return !q || (tq ? meetsAt(i, tq) : norm([r.subject, r.section, r.instructor, r.room, r.days].join(' ')).includes(q) || (slot && norm(item.req).includes(q))); }) : [];
     if (f === 'starred') idx = idx.filter(i => isStar(i, a));
-    if (q && !idx.length) return;
+    let hidden = 0;
+    if (state.fitsOnly) { const keep = idx.filter(i => state.rows[i].on[a] || !clashPreview(i, a).length); hidden = idx.length - keep.length; idx = keep; }
+    if (q && !idx.length && !hidden) return;
     const needers = people().map((_, i) => planHas(i, k) ? i : -1).filter(i => i >= 0);
     const st = item ? item : statusOf(a, subj);
     const pill = st.st === 'ready' ? `<span class="pillst st-ready">✓ section ${esc(st.rows.map(j => state.rows[j].section).join(', '))}</span>`
@@ -1390,10 +1412,31 @@ function renderPick() {
     html += `<div class="subj rv" style="--d:${Math.min(n++ * .04, .4)}s"><div class="subj-head"><h4>${esc(subj)}</h4><span class="row" style="margin:0; gap:8px">${tag}${nP() > 1 && needers.length ? `<span class="needers">needed by ${needers.map(i => crest(i, 'sm')).join('')}</span>` : ''}${pill}</span></div><div class="secs">`;
     if (!g) html += `<div class="sec-card" style="cursor:default"><span class="flag warn">not in the class offerings yet</span></div>`;
     idx.forEach(i => { html += secCard(i, a, bks); });
+    if (hidden) html += `<div class="sec-card" style="cursor:default; border-style:dashed; box-shadow:none"><span class="meta">${idx.length ? `+ ${hidden} more that clash` : `all ${hidden} section${hidden > 1 ? 's' : ''} clash with ${N(a) === 'You' ? 'your' : esc(N(a)) + '\'s'} other picks`}</span><button class="bk" data-act="fits-off" style="justify-self:start">show them</button></div>`;
     html += '</div></div>';
   });
   list.innerHTML = html || emptyBox(f === 'starred' ? '☆' : '🔍', f === 'picked' ? 'Nothing picked yet' : f === 'starred' ? 'No favorites yet' : 'No matches', f === 'picked' ? 'Tap sections in "all" to add them.' : f === 'starred' ? 'Tap "☆ star" on sections you like. Auto-build ranks them higher.' : 'Try a different search.');
 }
+/* "tue 2pm", "sat", "mon thu 9:30", "1400" → which days and what time to look for */
+function timeQuery(q) {
+  const D = { mon: 0, monday: 0, tue: 1, tues: 1, tuesday: 1, wed: 2, wednesday: 2, thu: 3, thur: 3, thurs: 3, thursday: 3, th: 3, fri: 4, friday: 4, sat: 5, saturday: 5 };
+  const toks = String(q || '').toLowerCase().replace(/(\d)\s+(am|pm)\b/g, '$1$2').split(/[\s,/]+/).filter(Boolean);
+  if (!toks.length) return null;
+  const days = [], out = { days, min: null };
+  for (const t of toks) {
+    if (D[t] !== undefined) { days.push(D[t]); continue; }
+    const m = t.match(/^(\d{1,2})(?::?(\d{2}))?(am|pm|nn)?$/);
+    if (!m || out.min !== null) return null;
+    const four = /^\d{4}$/.test(t), sure = m[3] || t.includes(':') || four;
+    if (!sure && !days.length && !toks.some(x => D[x] !== undefined)) return null;   // a bare number is probably a subject code
+    let h = +m[1], mm = +(m[2] || 0);
+    if (h > 23 || mm > 59) return null;
+    if (m[3] === 'pm' && h < 12) h += 12; else if (m[3] === 'am' && h === 12) h = 0; else if (!m[3] && !four && h < 7) h += 12;
+    out.min = h * 60 + mm;
+  }
+  return days.length || out.min !== null ? out : null;
+}
+const meetsAt = (i, tq) => C.parsed[i].some(ps => (!tq.days.length || ps.days.some(d => tq.days.includes(d))) && (tq.min === null || (ps.s <= tq.min && ps.e > tq.min)));
 function secCard(i, a, bks) {
   const r = state.rows[i], picked = !!r.on[a];
   const others = people().map((_, p) => p !== a && r.on[p] ? p : -1).filter(p => p >= 0);
@@ -1405,16 +1448,16 @@ function secCard(i, a, bks) {
   if (picked && C.conf[i][a].length) flag = `<span class="flag bad">⚠ clashes with ${esc(C.conf[i][a].join(', '))}</span>`;
   else if (!picked) { const cl = clashPreview(i, a); if (cl.length) flag = `<span class="flag warn">would clash with ${esc(cl.join(', '))}</span>`; }
   return `<div class="sec-card" role="button" tabindex="0" aria-pressed="${picked}" style="${pv(a)}" id="row-${i}" data-act="pick" data-i="${i}">
-    <div class="top"><span class="nm">${esc(r.section) || '—'}${star ? '<span class="st">★</span>' : ''}</span>${bIdx >= 0 ? `<span class="flag plan">plan ${'BC'[bIdx]}</span>` : `<span class="chk">${picked ? '✓' : ''}</span>`}</div>
+    <div class="top"><span class="nm">${esc(r.section) || '—'}${star ? '<span class="st">★</span>' : ''}${picked && isLocked(i, a) ? '<span class="st" title="locked">🔒</span>' : ''}</span>${bIdx >= 0 ? `<span class="flag plan">plan ${'BC'[bIdx]}</span>` : `<span class="chk">${picked ? '✓' : ''}</span>`}</div>
     <span class="when">${esc(whenText(C.parsed[i], r))}</span>
-    <span class="meta">${[r.room, r.instructor ? r.instructor + (pp === 'prefer' ? ' 👍' : pp === 'avoid' ? ' 👎' : '') : ''].filter(Boolean).map(esc).join(' · ')}${r.pair ? ` · 🔗 ${esc(r.pair)}` : ''}</span>
+    <span class="meta">${[r.room ? esc(r.room) : '', r.instructor ? `<button class="profbtn" data-act="prof" data-i="${i}" title="see all of ${esc(r.instructor)}'s sections">${esc(r.instructor)}${pp === 'prefer' ? ' 👍' : pp === 'avoid' ? ' 👎' : ''}</button>` : ''].filter(Boolean).join(' · ')}${r.pair ? ` · 🔗 ${esc(r.pair)}` : ''}</span>
     ${others.length ? `<span class="withs">with ${others.map(p => crest(p, 'sm')).join('')}</span>` : ''}
     ${sNote ? `<span class="cardnote">📝 ${esc(trunc(sNote, 70))}</span>` : ''}${pNote ? `<span class="cardnote">🧑‍🏫 ${esc(trunc(pNote, 70))}</span>` : ''}
     ${rNotes.map(n => `<span class="cardnote room">💬 ${esc(n.who)}: ${esc(n.text)}</span>`).join('')}
     ${rx && rx.list.length ? `<span class="reacts">${rx.list.map(x => `<span title="${esc(x.who.join(', '))}">${x.e} ${esc(x.who.join(', '))}</span>`).join('')}</span>` : ''}
     ${flag}
     ${rx && a !== me ? `<div class="rx" aria-label="react to ${esc(N(a))}'s pick">${REACTS.map(e => `<button data-act="react" data-i="${i}" data-e="${e}" aria-pressed="${rx.mine === e}" title="react ${e}">${e}</button>`).join('')}</div>` : ''}
-    <div class="cardfoot">${picked || !canEditQ(a) ? '' : `<button class="bk" data-act="backup" data-i="${i}">${bIdx >= 0 ? `remove plan ${'BC'[bIdx]}` : '+ backup'}</button>`}${canEditQ(a) ? `<button class="bk" data-act="star" data-i="${i}">${star ? '★ starred' : '☆ star'}</button>` : ''}<button class="bk" data-act="note" data-i="${i}">✎ note</button>${askable.length ? `<button class="bk" data-act="nudge" data-i="${i}">💌 ask ${askable.length === 1 ? esc(N(askable[0])) : 'friends'} to join</button>` : ''}</div>
+    <div class="cardfoot">${picked || !canEditQ(a) ? '' : `<button class="bk" data-act="backup" data-i="${i}">${bIdx >= 0 ? `remove plan ${'BC'[bIdx]}` : '+ backup'}</button>`}${canEditQ(a) ? `<button class="bk" data-act="star" data-i="${i}">${star ? '★ starred' : '☆ star'}</button>` : ''}${picked && canEditQ(a) ? `<button class="bk" data-act="lock" data-i="${i}" title="Auto-build always keeps a locked section">${isLocked(i, a) ? '🔒 locked' : '🔓 lock'}</button>` : ''}<button class="bk" data-act="note" data-i="${i}">✎ note</button>${askable.length ? `<button class="bk" data-act="nudge" data-i="${i}">💌 ask ${askable.length === 1 ? esc(N(askable[0])) : 'friends'} to join</button>` : ''}</div>
   </div>`;
 }
 
@@ -1432,6 +1475,8 @@ function combosFor(p, cap = CONFIG.BUILD_CAP) {
   const fixedSubs = new Set(plan.items.filter(x => x.kind === 'fixed' || x.manual).map(x => norm(x.subject)));
   const excl = ipsCodes(P);
   const prep = list => {
+    const lk = list.filter(i => isLocked(i, p));
+    if (lk.length) return lk;                     // a locked section is a must: it skips every filter
     let l = list.filter(i => okRowFor(i, p));
     if (b.keep) { const cur = l.filter(i => rows[i].on[p]); if (cur.length) l = cur; }
     return l.sort((x, y) => favOf(y, p) - favOf(x, p));
@@ -1520,7 +1565,7 @@ function sortOptions(list) {
 }
 function optionChips(o, p) {
   return `<span class="chip">${o.days} day${o.days > 1 ? 's' : ''}</span><span class="chip">${o.gaps ? `${fmtHrs(o.gaps)} of breaks` : 'no breaks'}</span><span class="chip">starts ${fmtT(o.first)}</span>`
-    + (o.fav ? `<span class="chip good">★ ${o.fav} fave pts</span>` : '') + (o.hops ? `<span class="chip">🚶 ${o.hops} tight walk${o.hops > 1 ? 's' : ''}</span>` : '')
+    + (o.fav ? `<span class="chip good">★ ${o.fav} fave pts</span>` : '') + (o.hops ? `<span class="chip">🚶 ${o.hops} building change${o.hops > 1 ? 's' : ''}</span>` : '')
     + (nP() > 1 && p !== undefined && o.friends ? `<span class="chip good">${o.friends} with friends</span>` : '');
 }
 function renderBuild() {
@@ -1539,7 +1584,7 @@ function renderBuild() {
       <div><p class="pref-label">Class hours per day</p><div class="toggles">${[0, 4, 5, 6].map(h => tg('maxHours', h, h ? `max ${h}h` : 'any')).join('')}</div></div>
       <div><p class="pref-label">Classes in a row · time to eat</p><div class="toggles">${[0, 2, 3].map(h => tg('maxRow', h, h ? `max ${h}` : 'any')).join('')}</div></div>
       <div><p class="pref-label">Day shape</p><div class="toggles">${tg('freeDay', true, '🌿 one weekday free')}${state.hideStraight ? `<button class="btn link" data-act="show-straight" title="show the classes-straight reminder in Pick again">show "classes straight" reminders</button>` : ''}</div></div>
-      <div><p class="pref-label">Profs & picks</p><div class="toggles">${tg('skipAvoid', true, '👎 skip avoided profs')}${tg('keep', true, 'keep sections already picked')}</div></div>
+      <div><p class="pref-label">Profs & picks</p><div class="toggles">${tg('skipAvoid', true, '👎 skip avoided profs')}${tg('keep', true, 'keep sections already picked')}</div>${(people()[state.active] || newPerson()).locks.length ? `<p class="hint" style="margin:6px 0 0">🔒 ${people()[state.active].locks.length} locked section${people()[state.active].locks.length > 1 ? 's are' : ' is'} always kept</p>` : ''}</div>
       <div><p class="pref-label">Sort by</p><div class="toggles">${tg('sort', 'days', 'fewest days')}${tg('sort', 'gaps', 'shortest breaks')}${tg('sort', 'late', 'latest start')}${tg('sort', 'fav', '★ favorites')}${nP() > 1 && !together ? tg('sort', 'friends', 'most with friends') : ''}</div></div>
     </div>`;
   if (!state.rows.length) { out.innerHTML = noClasses(); return; }
@@ -1614,15 +1659,21 @@ function renderWeek() {
   $('#weekDays').innerHTML = `<button data-act="wd" data-d="-1" aria-pressed="${wd < 0}">all</button>` + DAY_SHORT.map((d, i) => `<button data-act="wd" data-d="${i}" aria-pressed="${wd === i}">${d}</button>`).join('');
   if (!state.rows.length) { grid.innerHTML = noClasses(); $('#slotPanel').innerHTML = ''; $('#weekStats').innerHTML = ''; return; }
   const shown = people().map((_, i) => state.weekShow[i] ? i : -1).filter(i => i >= 0);
-  const H = CONFIG.HOUR_PX, S = CONFIG.DAY_START, E = CONFIG.DAY_END, lanes = Math.max(shown.length, 1), lw = 96 / lanes;
+  // lanes: one per person, or (when comparing drafts) one per draft of one person
+  const dp = draftOwner(), dsel = draftSel();
+  renderDraftBar(dp, dsel);
+  const L = dsel.length ? dsel.map((k, n) => ({ p: dp, color: n, label: draftLabel(dp, k), set: draftSet(dp, k), clashIn: true }))
+    : shown.map(p => ({ p, color: p, label: N(p), set: C.picks[p] }));
+  const H = CONFIG.HOUR_PX, S = CONFIG.DAY_START, E = gridEnd(), lanes = Math.max(L.length, 1), lw = 96 / lanes;
   const cols = DAY_SHORT.map(() => []);
   const pos = (s, e, lane) => `top:${(s - S * 60) / 60 * H}px; height:${Math.max((e - s) / 60 * H, 18)}px; left:${2 + lane * lw}%; width:${lw - 1.5}%`;
-  shown.forEach((p, lane) => {
-    people()[p].busy.forEach(b => b.days.forEach(d => cols[d].push(`<div class="blk busy" style="${pv(p)}; ${pos(b.s, b.e, lane)}">${esc(b.label)}</div>`)));
-    C.picks[p].forEach(i => {
-      const r = state.rows[i], clash = C.conf[i][p].length > 0;
-      C.parsed[i].forEach(ps => ps.days.forEach(d => cols[d].push(`<div class="blk${clash ? ' clash' : ''}" style="${pv(p)}; ${pos(ps.s, ps.e, lane)}"
-        data-act="goto" data-i="${i}" data-p="${p}" title="${esc(`${N(p)} · ${rowLabel(r)} · ${fmtRange(ps.s, ps.e)}${r.room ? ' · ' + r.room : ''}`)}">${esc(r.subject)}<br><span class="s">${esc(r.section)}${wd >= 0 && r.room ? ' · ' + esc(r.room) : ''}</span></div>`)));
+  L.forEach((ln, lane) => {
+    const p = ln.p;
+    people()[p].busy.forEach(b => b.days.forEach(d => cols[d].push(`<div class="blk busy" style="${pv(ln.color)}; ${pos(b.s, b.e, lane)}">${esc(b.label)}</div>`)));
+    ln.set.forEach(i => {
+      const r = state.rows[i], clash = ln.clashIn ? ln.set.some(j => j !== i && C.ov(i, j)) : C.conf[i][p].length > 0;
+      C.parsed[i].forEach(ps => ps.days.forEach(d => cols[d].push(`<div class="blk${clash ? ' clash' : ''}" style="${pv(ln.color)}; ${pos(ps.s, ps.e, lane)}"
+        data-act="goto" data-i="${i}" data-p="${p}" title="${esc(`${ln.label} · ${rowLabel(r)} · ${fmtRange(ps.s, ps.e)}${r.room ? ' · ' + r.room : ''}`)}">${esc(r.subject)}<br><span class="s">${esc(r.section)}${wd >= 0 && r.room ? ' · ' + esc(r.room) : ''}</span></div>`)));
     });
   });
   if (slot && days.includes(slot.day)) cols[slot.day].push(`<div class="slotmark" style="top:${(slot.min - S * 60) / 60 * H}px"></div>`);
@@ -1633,7 +1684,44 @@ function renderWeek() {
     <div class="tl-body" style="height:${(E - S) * H}px"><div class="tl-axis">${axis}</div>${days.map(d => `<div class="tl-col" data-act="slot" data-day="${d}">${cols[d].join('')}</div>`).join('')}</div>
   </div>`;
   renderSlot();
-  renderWeekStats(shown);
+  if (dsel.length) renderDraftStats(dp, dsel); else renderWeekStats(shown);
+  $('[data-act=save-image-week]').classList.toggle('hidden', !!dsel.length);
+}
+/* ----- comparing up to 3 drafts side by side ----- */
+const draftOwner = () => connected() ? myIdx() : state.active;
+function draftSel() {
+  const P = people()[draftOwner()]; if (!P) return [];
+  return (state.draftCmp || []).filter(k => k === 'now' || (P.drafts[+k] !== undefined));
+}
+const draftLabel = (p, k) => k === 'now' ? 'current picks' : people()[p].drafts[+k].name;
+const draftSet = (p, k) => k === 'now' ? C.picks[p] : people()[p].drafts[+k].keys.map(x => C.byKey.get(x)).filter(i => i !== undefined);
+function renderDraftBar(dp, dsel) {
+  const P = people()[dp], el = $('#draftBar');
+  if (!P || !P.drafts.length) { el.innerHTML = ''; return; }
+  const opt = (k, name) => { const n = dsel.indexOf(k); return `<button class="who" data-act="dcmp" data-k="${k}" aria-pressed="${n >= 0}" style="${n >= 0 ? pv(n) : ''}; padding:5px 12px">${n >= 0 ? '✓ ' : ''}${esc(name)}</button>`; };
+  el.innerHTML = `<div class="row" style="margin:0 0 10px; gap:6px; align-items:center"><span class="pref-label" style="margin:0">📑 compare ${N(dp) === 'You' ? 'your' : esc(N(dp)) + '\'s'} drafts (up to 3):</span>
+    ${opt('now', 'current picks')}${P.drafts.map((d, k) => opt(String(k), d.name)).join('')}
+    ${dsel.length ? '<button class="btn small link" data-act="dcmp-off">✕ back to people</button>' : ''}</div>`;
+}
+function toggleDraftCmp(k) {
+  let sel = draftSel();
+  if (sel.includes(k)) sel = sel.filter(x => x !== k);
+  else if (sel.length >= 3) return toast('You can compare up to 3 at a time. Untick one first.');
+  else sel = [...sel, k];
+  state.draftCmp = sel; save(); render();
+}
+function renderDraftStats(dp, dsel) {
+  $('#weekStats').innerHTML = dsel.map((k, n) => {
+    const set = draftSet(dp, k), o = scoreOf(set, dp), clashes = set.filter(i => set.some(j => j !== i && C.ov(i, j))).length;
+    const days = dayLists(set), mins = days.map(l => l.reduce((a, x) => a + x.e - x.s, 0)), total = mins.reduce((a, b) => a + b, 0);
+    const last = Math.max(0, ...days.flat().map(x => x.e)), runs = straightRuns(days, people()[dp].busy);
+    return `<div class="card rv" style="${pv(n)}; --d:${n * .06}s">
+      <div class="prog-top"><span class="crest" style="${pv(n)}">${n + 1}</span><span class="nm" style="font-size:20px">${esc(draftLabel(dp, k))}</span></div>
+      <div class="chips"><span class="chip">${set.length} section${set.length === 1 ? '' : 's'}</span><span class="chip">${o.days} day${o.days === 1 ? '' : 's'}</span><span class="chip">${fmtHrs(total)} a week</span>
+        ${set.length ? `<span class="chip">earliest ${fmtT(o.first)}</span><span class="chip">latest ${fmtT(last)}</span><span class="chip">${o.gaps ? fmtHrs(o.gaps) + ' of breaks' : 'no breaks'}</span>` : ''}
+        ${o.freeWeekday ? '<span class="chip good">🌿 a weekday free</span>' : ''}${runs.length ? `<span class="chip">😵 ${Math.max(...runs.map(r => r.items.length))} straight</span>` : ''}${clashes ? `<span class="chip" style="color:var(--bad)">⚠ ${clashes} clashing</span>` : ''}</div>
+    </div>`;
+  }).join('');
 }
 function renderSlot() {
   const el = $('#slotPanel');
@@ -1645,6 +1733,13 @@ function renderSlot() {
     ${hits.map(i => { const r = state.rows[i]; return `<div class="item"><div><div class="t">${esc(rowLabel(r))}</div><div class="m">${esc(whenText(C.parsed[i], r))}${r.instructor ? ' · ' + esc(r.instructor) : ''}</div></div>
       <div class="whochips">${people().map((_, p) => { const cl = !r.on[p] ? clashPreview(i, p) : []; return `<button class="who" style="${pv(p)}; padding:3px 10px 3px 3px; font-size:13px" data-act="slot-pick" data-i="${i}" data-p="${p}" aria-pressed="${!!r.on[p]}" title="${cl.length ? 'would clash with ' + esc(cl.join(', ')) : ''}">${crest(p, 'sm')}${r.on[p] ? '✓' : cl.length ? '⚠' : '+'}</button>`; }).join('')}</div></div>`; }).join('')}
   </div>`;
+}
+/* back-to-back classes in different buildings: just a heads-up, since most blocks have no gap anyway */
+function walkNote(days) {
+  const hops = hopsOf(days); if (!hops.length) return '';
+  const byText = new Map();
+  hops.forEach(h => { const t = `${esc(state.rows[h.a].subject)} (${esc(h.x)}) → ${esc(state.rows[h.b].subject)} (${esc(h.y)})`; byText.set(t, [...(byText.get(t) || []), DAY_SHORT[h.d]]); });
+  return `<p class="hint" style="margin:10px 0 0">🚶 Building changes right after class: ${[...byText].map(([t, ds]) => `${ds.join('/')} ${t}`).join(' · ')}</p>`;
 }
 function renderWeekStats(shown) {
   $('#weekStats').innerHTML = shown.map((p, n) => {
@@ -1659,6 +1754,7 @@ function renderWeekStats(shown) {
     return `<div class="card rv" style="${pv(p)}; --d:${n * .06}s">
       <div class="prog-top">${crest(p)}<span class="nm" style="font-size:20px">${N(p) === 'You' ? 'Your' : esc(N(p)) + '\'s'} week in numbers</span></div>
       <div class="hbars">${mins.map((m, d) => `<div><span>${m ? fmtHrs(m) : ''}</span><i class="${m ? '' : 'zero'}" style="height:${m ? Math.max(m / max * 64, 6) : 3}px"></i>${DAY_SHORT[d]}</div>`).join('')}</div>
+      ${walkNote(days)}
       <div class="chips"><span class="chip">${fmtHrs(total)} of class a week</span><span class="chip">longest: ${DAY_SHORT[longest]} (${fmtHrs(mins[longest])})</span><span class="chip">earliest ${fmtT(first)}</span><span class="chip">latest ${fmtT(last)}</span><span class="chip">${gaps ? fmtHrs(gaps) + ' of breaks' : 'no breaks'}</span></div>
     </div>`;
   }).join('');
@@ -1712,18 +1808,28 @@ function renderCompare() {
 }
 
 /* ----- checklist ----- */
+/* how many sections of an IPS line could still go in without clashing (picked ones count) */
+function fitCount(p, x) {
+  const subs = x.subject ? [x.subject] : x.rule ? eligibleFor(p, x) : [];
+  const ks = new Set(subs.map(norm));
+  return state.rows.map((r, k) => k).filter(k => ks.has(norm(state.rows[k].subject)) && (state.rows[k].on[p] || !clashPreview(k, p).length)).length;
+}
 function renderCheck() {
-  const el = $('#checkBody');
-  el.innerHTML = people().map((p, i) => {
+  const el = $('#checkBody'), hard = state.checkSort === 'hard';
+  el.innerHTML = `<div class="row" style="grid-column:1/-1; margin:0 0 4px"><div class="seg" role="group"><button data-act="check-sort" data-v="ips" aria-pressed="${!hard}">IPS order</button><button data-act="check-sort" data-v="hard" aria-pressed="${hard}">hardest to fit first</button></div>
+    <span class="hint" style="margin:0">the number on each subject = sections that still fit your other picks</span></div>` + people().map((p, i) => {
     const plan = C.plans[i], pr = progressOf(i);
+    const fits = new Map(plan.items.map(x => [x, fitCount(i, x)]));
+    const items = hard ? [...plan.items].sort((a, b) => fits.get(a) - fits.get(b)) : plan.items;
     const msg = !pr.req ? '' : pr.done === pr.req ? 'every subject covered ✦' : pr.done / pr.req >= .5 ? 'more than halfway there' : 'just getting started';
-    const reqRows = plan.items.map(x => {
+    const reqRows = items.map(x => {
+      const fn = fits.get(x), fc = `<span class="fitchip ${fn === 0 ? 'none' : fn <= 2 ? 'low' : ''}" title="sections that still fit">${fn === 0 ? 'none fit' : fn + ' fit'}</span>`;
       const ic = { ready: '<span style="color:var(--ok)">✓</span>', conflict: '<span style="color:var(--bad)">⚠</span>', missing: '<span style="color:var(--muted)">○</span>' }[x.st];
       const label = x.kind === 'slot' ? `${slotLabel(x.req)}${x.subject ? ' → ' + x.subject : ''}` : x.req;
       const planA = x.rows.length ? x.rows.map(j => `${esc(state.rows[j].section)} · ${esc(whenText(C.parsed[j], state.rows[j]))}${C.conf[j][i].length ? ` <span style="color:var(--bad)">· clashes with ${esc(C.conf[j][i].join(', '))}</span>` : ''}`).join(', ')
         : !x.subject ? '<i>elective · no subject chosen yet</i>' : x.offered ? '<i>not picked yet</i>' : '<span style="color:var(--warn)">not in the class offerings</span>';
       const bks = x.subject ? backupList(i, x.subject).map(k => C.byKey.get(k)) : [];
-      return `<div class="ck"><span class="ic">${ic}</span><span class="t" data-act="jump" data-p="${i}" data-s="${esc(x.subject || '')}">${esc(label)}</span>
+      return `<div class="ck"><span class="ic">${ic}</span><span class="t" data-act="jump" data-p="${i}" data-s="${esc(x.subject || '')}">${esc(label)}${fc}</span>
         <div class="plans"><span><b>A</b>${planA}</span>${bks.map((j, n) => `<span><b>${'BC'[n]}</b>${esc(state.rows[j].section)} · ${esc(whenText(C.parsed[j], state.rows[j]))}</span>`).join('')}</div></div>`;
     }).join('');
     const extras = plan.extras;
@@ -1768,6 +1874,22 @@ async function editNote(i) {
   if (so && (res.room || '').trim() !== mineRN) {
     try { await roomCall('roomNote', { key: keyOf(r), text: (res.room || '').trim() }); } catch (e) { toast(e.message); }
   }
+}
+async function profPage(i) {
+  const r0 = state.rows[i], pk = profKey(r0); if (!pk) return;
+  const list = state.rows.map((r, k) => k).filter(k => profKey(state.rows[k]) === pk);
+  const pp = state.profs[pk], pNote = state.notes['p:' + pk];
+  const rn = SOC() ? list.flatMap(k => roomNotes(keyOf(state.rows[k])).map(n => ({ ...n, sec: rowLabel(state.rows[k]) }))) : [];
+  const res = await openModal(`<h3>🧑‍🏫 ${esc(r0.instructor)}${pp === 'prefer' ? ' 👍' : pp === 'avoid' ? ' 👎' : ''}</h3>
+    <p>${list.length} section${list.length > 1 ? 's' : ''} in ${esc(state.sheetName || 'this tab')}</p>
+    ${pNote ? `<p class="cardnote" style="display:inline-block">📝 ${esc(pNote)}</p>` : ''}
+    ${rn.map(n => `<p class="cardnote room" style="display:inline-block; margin-right:6px">💬 ${esc(n.who)} (${esc(n.sec)}): ${esc(n.text)}</p>`).join('')}
+    <div style="margin-top:8px; max-height:46vh; overflow:auto">${list.map(k => { const r = state.rows[k], who = people().map((_, p) => r.on[p] ? p : -1).filter(p => p >= 0);
+      return `<div class="item" style="padding:9px 0"><div><div class="t">${esc(rowLabel(r))}</div><div class="m">${esc(whenText(C.parsed[k], r))}${r.room ? ' · ' + esc(r.room) : ''}</div></div><span class="row" style="margin:0; gap:3px">${who.map(p => crest(p, 'sm')).join('')}<button class="btn small ghost" data-choice="go:${k}">view</button></span></div>`; }).join('')}</div>
+    <div class="row"><button class="btn small" data-choice="note">✎ notes & 👍/👎</button><button class="btn small ghost" data-choice="">close</button></div>`);
+  if (!res || !res.choice) return;
+  if (res.choice === 'note') return editNote(i);
+  if (res.choice.startsWith('go:')) { const k = +res.choice.slice(3); state.pickFilter = 'all'; $('#search').value = ''; jumpTo(k); }
 }
 async function pickEmoji(i) {
   const res = await openModal(`<h3>Pick an emoji for ${esc(N(i))}</h3><p>It replaces the initial everywhere.</p>
@@ -2136,7 +2258,7 @@ function exportXlsx() {
 }
 
 /* ======================= Google Sheets sync: profiles & rooms ======================= */
-const SYNC_URL = 'https://script.google.com/macros/s/AKfycbw1FL9ma3mPFCzHabz89AVlWWySAPdQiQ79iiNbKD5aOpvNmrRso0bOWw5bgeOPa762/exec'; // ← paste your Apps Script web app URL (ends in /exec) between the quotes
+const SYNC_URL = ''; // ← paste your Apps Script web app URL (ends in /exec) between the quotes
 const SY = () => state.sync;
 const syncUrl = () => SYNC_URL || SY().url || '';
 const connected = () => !!(syncUrl() && SY().me && SY().mine);
@@ -2146,8 +2268,8 @@ const canEditQ = p => !connected() || p === myIdx();
 function canEdit(p) { if (canEditQ(p)) return true; toast(`Only ${N(p)} can change ${N(p)}'s plan 🔒`); return false; }
 const fmtCode = c => { c = String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); return c.length === 8 ? c.slice(0, 4) + '-' + c.slice(4) : c.length === 10 ? c.slice(0, 5) + '-' + c.slice(5) : c; };
 const authBody = () => ({ id: SY().me.id, token: SY().me.token });
-const normMine = m => ({ name: m.name || '', emoji: m.emoji || '', reqs: m.reqs || [], picks: m.picks || [], backups: m.backups || {}, stars: m.stars || [], busy: m.busy || [], slots: m.slots || {}, drafts: m.drafts || [], notes: m.notes || {}, profs: m.profs || {}, ips: m.ips || null, side: m.side || 'L', ipsName: m.ipsName || '' });
-const pubOf = m => ({ name: m.name, emoji: m.emoji, reqs: m.reqs, picks: m.picks, backups: m.backups, stars: m.stars, busy: m.busy, slots: m.slots });
+const normMine = m => ({ name: m.name || '', emoji: m.emoji || '', reqs: m.reqs || [], picks: m.picks || [], backups: m.backups || {}, stars: m.stars || [], busy: m.busy || [], slots: m.slots || {}, locks: m.locks || [], drafts: m.drafts || [], notes: m.notes || {}, profs: m.profs || {}, ips: m.ips || null, side: m.side || 'L', ipsName: m.ipsName || '' });
+const pubOf = m => ({ name: m.name, emoji: m.emoji, reqs: m.reqs, picks: m.picks, backups: m.backups, stars: m.stars, busy: m.busy, slots: m.slots, locks: m.locks });
 const privOf = m => ({ drafts: m.drafts, notes: m.notes, profs: m.profs, ips: m.ips, side: m.side, ipsName: m.ipsName });
 const pending = () => connected() && JSON.stringify(SY().mine) !== SY().lastPushed;
 let needActive = false, materializing = false, pushTimer = null, pushing = false, pollTimer = null, lastSig = '', syncStatus = 'ok', pendingJoin = null;
@@ -2166,7 +2288,7 @@ async function api(a, body = {}) {
 }
 
 /* the view (state.people + row ticks) is rebuilt from your profile and your room's members */
-function personOf(m) { m = m || {}; return Object.assign(newPerson(), { name: m.name || '', emoji: m.emoji || '', reqs: m.reqs || [], backups: m.backups || {}, stars: m.stars || [], busy: m.busy || [], slots: m.slots || {}, drafts: m.drafts || [], ips: m.ips ? clone(m.ips) : null, side: m.side || 'L', ipsName: m.ipsName || '' }); }
+function personOf(m) { m = m || {}; return Object.assign(newPerson(), { name: m.name || '', emoji: m.emoji || '', reqs: m.reqs || [], backups: m.backups || {}, stars: m.stars || [], busy: m.busy || [], slots: m.slots || {}, locks: m.locks || [], drafts: m.drafts || [], ips: m.ips ? clone(m.ips) : null, side: m.side || 'L', ipsName: m.ipsName || '' }); }
 function materialize() {
   if (!connected()) return;
   const sy = SY(), rc = curRoom();
@@ -2184,11 +2306,11 @@ function extractMine() {
   const present = new Set(state.rows.map(keyOf));
   const kept = (sy.mine.picks || []).filter(k => !present.has(k));   // picks from other semesters' tabs survive
   sy.mine = normMine({ name: p.name, emoji: p.emoji, reqs: p.reqs, picks: uniq([...kept, ...state.rows.filter(r => r.on[i]).map(keyOf)]),
-                       backups: p.backups, stars: p.stars, busy: p.busy, slots: p.slots, drafts: p.drafts, notes: state.notes, profs: state.profs, ips: p.ips, side: p.side, ipsName: p.ipsName });
+                       backups: p.backups, stars: p.stars, busy: p.busy, slots: p.slots, locks: p.locks, drafts: p.drafts, notes: state.notes, profs: state.profs, ips: p.ips, side: p.side, ipsName: p.ipsName });
 }
 function mineFromLocal() {
   const p = state.people[0] || newPerson();
-  return normMine({ name: p.name, emoji: p.emoji, reqs: p.reqs, picks: state.rows.filter(r => r.on[0]).map(keyOf), backups: p.backups, stars: p.stars, busy: p.busy, slots: p.slots, drafts: p.drafts, notes: state.notes, profs: state.profs, ips: p.ips, side: p.side, ipsName: p.ipsName });
+  return normMine({ name: p.name, emoji: p.emoji, reqs: p.reqs, picks: state.rows.filter(r => r.on[0]).map(keyOf), backups: p.backups, stars: p.stars, busy: p.busy, slots: p.slots, locks: p.locks, drafts: p.drafts, notes: state.notes, profs: state.profs, ips: p.ips, side: p.side, ipsName: p.ipsName });
 }
 function currentSig() {
   const sy = SY(), rc = curRoom(), me = sy.me ? sy.me.id : '';
@@ -2501,6 +2623,8 @@ async function joinRoom(code) {
     const rc = (await api('joinRoom', { ...authBody(), code })).room;
     SY().roomCache[rc.code] = rc; upsertRoomList(rc); switchRoom(rc.code);
     toast(`you're in "${rc.name}" ✦`); switchTab('compare');
+    const me = state.people[myIdx()];
+    if (!state.tipsSeen && me && !me.reqs.length && !me.ips) setTimeout(() => showTips(rc.name), 400);
   } catch (e) { toast(e.message); }
 }
 function inviteLink(code) {
@@ -2574,6 +2698,18 @@ async function handleJoinHash(code, s) {
     <div class="row"><button class="btn small" data-choice="new">create my profile</button><button class="btn small ghost" data-choice="in">sign in</button></div>`);
   const ok = res && res.choice === 'new' ? await createProfile() : res && res.choice === 'in' ? await signIn() : false;
   if (!ok) pendingJoin = null;
+}
+
+/* ----- 3 quick steps for someone who just joined from an invite ----- */
+async function showTips(roomName) {
+  state.tipsSeen = true; persist();
+  const step = (n, t, d) => `<div style="display:grid; grid-template-columns:auto 1fr; gap:12px; align-items:start; margin-top:14px"><span class="crest" style="${pv(myIdx() >= 0 ? myIdx() : 0)}">${n}</span><div><b>${t}</b><br><span style="color:var(--muted); font-size:14px; line-height:1.4">${d}</span></div></div>`;
+  const res = await openModal(`<h3>${roomName ? `Welcome to "${esc(roomName)}" ✦` : 'How it works ✦'}</h3><p>Three quick steps:</p>
+    ${step(1, '📋 Paste your whole IPS', 'Setup → paste your whole IPS. Do it once and the site fills in each semester\'s subjects for you.')}
+    ${step(2, '✎ Pick your sections', 'Tap a section to add it. Clashes show before you commit, and "only what fits" hides the ones that won\'t work.')}
+    ${step(3, '👯 See who you\'re with', 'Compare shows the classes you share, what friends just picked, and 💌 requests to join their sections.')}
+    <div class="row" style="margin-top:18px"><button class="btn small" data-choice="ips">paste my IPS now</button><button class="btn small ghost" data-choice="">got it</button></div>`);
+  if (res && res.choice === 'ips') { switchTab('setup'); setTimeout(() => pasteIps(Math.max(0, myIdx())), 250); }
 }
 
 /* ----- room extras: activity, nudges, room notes, reactions ----- */
@@ -2756,7 +2892,7 @@ function renderSyncCard() {
   }
   el.innerHTML = head('Your rooms', 'Your plan is the same in every room. Switch rooms at the top of the page.') +
     `<div>${sy.rooms.length ? sy.rooms.map(roomItem).join('') : '<p class="hint" style="margin:0 0 10px">No rooms yet. Make one and invite your friends, or join theirs with a code.</p>'}</div>
-    <div class="row" style="margin-top:0"><button class="btn small" data-act="room-new">+ new room</button><button class="btn small ghost" data-act="room-join">join with a code</button></div>
+    <div class="row" style="margin-top:0"><button class="btn small" data-act="room-new">+ new room</button><button class="btn small ghost" data-act="room-join">join with a code</button><button class="btn small link" data-act="tips">? how it works</button></div>
     <details ${sy.hasRec === false ? 'open' : ''}><summary>your account${sy.hasRec === false ? ' · <span style="color:var(--bad)">make a recovery code</span>' : ''}</summary>
       <p class="hint">Your personal code is <b class="code">${fmtCode(sy.me.id)}</b>. Use it with your PIN to sign in on another device.</p>
       ${sy.hasRec === false ? '<div class="alert"><b>🔑 No recovery code yet</b>Make one so you can reset your PIN if you forget it.</div>' : ''}
@@ -2799,6 +2935,7 @@ function switchTab(t) {
 }
 $$('[data-tab]').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
 $$('[data-theme-set]').forEach(b => b.addEventListener('click', () => { state.theme = b.dataset.themeSet; save(); applyTheme(); }));
+$('#fitsBtn').addEventListener('click', () => { state.fitsOnly = !state.fitsOnly; save(); render(); });
 $('#pickFilter').addEventListener('click', e => { const b = e.target.closest('[data-f]'); if (!b) return; state.pickFilter = b.dataset.f; save(); render(); });
 $('#search').addEventListener('input', () => render());
 
@@ -2960,6 +3097,13 @@ document.addEventListener('click', async e => {
     case 'sync-signin': return signIn();
     case 'sync-pin': return changePin();
     case 'sync-rec': return newRecovery();
+    case 'lock': return toggleLock(i, state.active);
+    case 'prof': return profPage(i);
+    case 'dcmp': return toggleDraftCmp(el.dataset.k);
+    case 'dcmp-off': state.draftCmp = []; save(); return render();
+    case 'check-sort': state.checkSort = el.dataset.v; save(); return render();
+    case 'fits-off': state.fitsOnly = false; save(); return render();
+    case 'tips': return showTips();
     case 'show-straight': state.hideStraight = false; save(); render(); return toast('"classes straight" reminders are back');
     case 'hide-straight': state.hideStraight = true; save(); render(); return toast('hidden · turn it back on in Auto-build', { label: 'undo', fn: () => { state.hideStraight = false; save(); render(); } });
     case 'ips-paste': return canEdit(i) && pasteIps(i);
