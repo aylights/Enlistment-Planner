@@ -460,7 +460,7 @@
             <p class="hint" style="margin-top:6px">A bookmark you click while you're on AISIS's <b>Schedule of Classes</b> page. It copies every section shown, all pages, already in this site's format.</p>
             <ol class="hint" style="padding-left:18px; margin:6px 0">
               <li><b>Add the button once:</b> drag <a class="btn small" id="aisisBm" href="#" onclick="return false" draggable="true">📋 AISIS → Enlistment Hub</a> to your bookmarks bar. On a phone or if dragging doesn't work, make any bookmark, edit it, and replace its address with the code below.</li>
-              <li>On AISIS, choose the term and department and click <b>Display Class Schedule</b>, then click the bookmark.</li>
+              <li>On AISIS's Schedule of Classes page, choose the <b>term</b>, then click the bookmark. A small panel offers <b>every department</b> (it reads them one by one, about a minute, then you tap <b>copy</b>) or <b>this list only</b> (the department on screen). Pair sections in Remarks fill in Pair Subject.</li>
               <li>Paste: into your term tab in the Google Sheet (click the first empty cell in the Subject column, Ctrl+V), or into the <b>paste rows</b> box here if you're not using the sheet.</li>
             </ol>
             <textarea id="aisisBmCode" readonly style="min-height:54px; font-size:11px" onclick="this.select()"></textarea>
@@ -2270,41 +2270,106 @@ function exportXlsx() {
 }
 
 /* ======================= AISIS bookmark button ======================= */
-/* Runs on AISIS's Schedule of Classes page (in the person's own browser) and copies the table in this site's column order:
-   Subject · Section · Day · Time · Room · Instructor · Pair Subject · Language. Undergraduate classes only. */
+/* Runs on AISIS's Schedule of Classes page, in the person's own browser. Copies classes in this site's column order:
+   Subject, Section, Day, Time, Room, Instructor, Pair Subject, Language. Undergraduate only. Either the list on screen,
+   or every department of the chosen term (fetched one by one from this same page, about one a second).
+   No comments inside: the code is squeezed onto one line for the bookmark. */
 function aisisCopier() {
-  var t = document.getElementById('example');
-  if (!t) { alert('Open AISIS > Schedule of Classes, choose a term and department, click "Display Class Schedule", then click this bookmark.'); return; }
-  var trs = null;
-  try { if (window.jQuery && jQuery.fn.dataTable) trs = jQuery(t).DataTable().rows().nodes().toArray(); } catch (e) {}
-  if (!trs) trs = Array.prototype.slice.call(t.tBodies[0].rows);
-  var head = Array.prototype.map.call((t.tHead || t).rows[0].cells, function (c) { return c.textContent.trim().toLowerCase(); });
-  var at = function (n) { for (var i = 0; i < head.length; i++) if (head[i].indexOf(n) === 0) return i; return -1; };
-  var C = { s: at('subject'), x: at('section'), t: at('time'), r: at('room'), i: at('instructor'), l: at('lang'), v: at('level') };
+  if (document.getElementById('ehx')) { document.getElementById('ehx').style.display = 'block'; return; }
+  var form = document.forms.classScheduleForm, shown = document.getElementById('example');
+  if (!form && !shown) { alert('Open AISIS > Schedule of Classes first, then click this bookmark.'); return; }
   var NM = { M: 'Monday', T: 'Tuesday', W: 'Wednesday', TH: 'Thursday', F: 'Friday', SAT: 'Saturday', S: 'Saturday', SU: 'Sunday', SUN: 'Sunday' };
-  var txt = function (td) { if (!td) return ''; var d = document.createElement('div'); d.innerHTML = td.innerHTML.replace(/<br\s*\/?>/gi, ' '); return d.textContent.replace(/\s+/g, ' ').trim(); };
-  var fixN = function (s) { return s.replace(/(\u00ef\u00bf\u00bd|\uFFFD)/g, function (m, x, i) { var p = s.charAt(i - 1); return /[a-z]/.test(p) ? '\u00f1' : /[A-Z]/.test(p) ? '\u00d1' : m; }); };
-  var out = [], seen = {}, grad = 0;
-  trs.forEach(function (tr) {
-    var c = tr.cells, g = function (k) { return k >= 0 ? fixN(txt(c[k])) : ''; };
-    var subj = g(C.s); if (!subj) return;
-    var lv = g(C.v).toUpperCase(); if (lv && lv !== 'U') { grad++; return; }
-    var T = g(C.t).toUpperCase(), re = /(^|[\s;,])((?:SAT|SUN|SU|TH|M|T|W|F|S|D)(?:\s*-\s*(?:SAT|SUN|SU|TH|M|T|W|F|S))*)\s+(\d{3,4})\s*-\s*(\d{3,4})/g, m, d = [], tm = [];
+  var fixN = function (s) { return s.replace(/(\u00ef\u00bf\u00bd|\ufffd)/g, function (m, x, i) { var p = s.charAt(i - 1); return /[a-z]/.test(p) ? '\u00f1' : /[A-Z]/.test(p) ? '\u00d1' : m; }); };
+  var txt = function (td) { if (!td) return ''; var d = document.createElement('div'); d.innerHTML = td.innerHTML.replace(/<br\s*\/?>/gi, ' '); return fixN(d.textContent.replace(/\s+/g, ' ').trim()); };
+  var when = function (T) {
+    var re = /(^|[\s;,])((?:SAT|SUN|SU|TH|M|T|W|F|S|D)(?:\s*-\s*(?:SAT|SUN|SU|TH|M|T|W|F|S))*)\s+(\d{3,4})\s*-\s*(\d{3,4})/g, m, d = [], tm = [];
     while ((m = re.exec(T))) {
       var code = m[2].replace(/\s+/g, ''), tt = ('0' + m[3]).slice(-4) + '-' + ('0' + m[4]).slice(-4);
       (code === 'D' ? ['Daily'] : code.split('-').map(function (x) { return NM[x]; }).filter(Boolean)).forEach(function (x) { d.push(x); tm.push(tt); });
     }
     var same = tm.every(function (x) { return x === tm[0]; });
-    var days = d.join(', '), time = !d.length ? (/TBA/.test(T) ? 'TBA' : T) : same ? tm[0] : tm.join(', ');
-    var room = g(C.r); if (/ONLINE/.test(T) && (!room || /^TBA$/i.test(room))) room = 'ONLINE';
-    var inst = g(C.i).replace(/,\s*-\s*$/, '').trim(); if (/^TBA\b/i.test(inst)) inst = 'TBA';
-    var lang = g(C.l).toUpperCase(); if (lang !== 'ENG' && lang !== 'FIL') lang = '';
-    var key = subj + ' ' + g(C.x); if (seen[key]) return; seen[key] = 1;
-    out.push([subj, g(C.x), days, time, room, inst, '', lang].join('\t'));
-  });
-  var text = out.join('\n'), msg = 'Copied ' + out.length + ' sections' + (grad ? ' (' + grad + ' graduate classes left out)' : '') + '.\n\nPaste them into your term tab in the Google Sheet: click the first empty cell under "Subject", then Ctrl+V (Cmd+V on a Mac).';
-  var fallback = function () { var a = document.createElement('textarea'); a.value = text; document.body.appendChild(a); a.select(); var ok = false; try { ok = document.execCommand('copy'); } catch (e) {} a.remove(); if (ok) alert(msg); else prompt('Copy this (Ctrl+C), then paste it into your term tab:', text); };
-  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { alert(msg); }, fallback); else fallback();
+    return { days: d.join(', '), time: !d.length ? (/TBA/.test(T) ? 'TBA' : T) : same ? tm[0] : tm.join(', ') };
+  };
+  var read = function (tbl, trs, out, stat) {
+    var head = Array.prototype.map.call((tbl.tHead || tbl).rows[0].cells, function (c) { return c.textContent.trim().toLowerCase(); });
+    var at = function (n) { for (var i = 0; i < head.length; i++) if (head[i].indexOf(n) === 0) return i; return -1; };
+    var C = { s: at('subject'), x: at('section'), t: at('time'), r: at('room'), i: at('instructor'), l: at('lang'), v: at('level'), k: at('remark') };
+    trs.forEach(function (tr) {
+      var c = tr.cells, g = function (k) { return k >= 0 ? txt(c[k]) : ''; };
+      var subj = g(C.s); if (!subj || /^subject/i.test(subj)) return;
+      var lv = g(C.v).toUpperCase(); if (lv && lv !== 'U') { stat.grad++; return; }
+      var T = g(C.t).toUpperCase(), w = when(T), room = g(C.r);
+      if (/ONLINE/.test(T) && (!room || /^TBA$/i.test(room))) room = 'ONLINE';
+      var inst = g(C.i).replace(/,\s*-\s*$/, '').trim(); if (/^TBA\b/i.test(inst)) inst = 'TBA';
+      var lang = g(C.l).toUpperCase(); if (lang !== 'ENG' && lang !== 'FIL') lang = '';
+      var key = (subj + ' ' + g(C.x)).toUpperCase(); if (stat.seen[key]) return; stat.seen[key] = 1;
+      out.push({ s: subj, x: g(C.x), d: w.days, t: w.time, r: room, i: inst, l: lang, k: g(C.k).toUpperCase(), p: '' });
+    });
+  };
+  var pairUp = function (list) {
+    var keys = {}, codes = {}, glued = {};
+    list.forEach(function (o) { var c = o.s.toUpperCase(); keys[(o.s + ' ' + o.x).toUpperCase()] = o; codes[c] = c; glued[c.replace(/\s+/g, '')] = c; });
+    var bare = function (t) { return (t || '').replace(/^[^A-Z0-9]+|[^A-Z0-9]+$/g, ''); };
+    list.forEach(function (o) {
+      var w = o.k.replace(/[(),;:*]/g, ' ').split(/\s+/).filter(Boolean), me = (o.s + ' ' + o.x).toUpperCase();
+      for (var j = 0; j < w.length && !o.p; j++) {
+        var code = null, n = j;
+        if (j + 1 < w.length && codes[bare(w[j]) + ' ' + bare(w[j + 1])]) { code = bare(w[j]) + ' ' + bare(w[j + 1]); n = j + 2; }
+        else if (glued[bare(w[j])]) { code = glued[bare(w[j])]; n = j + 1; }
+        if (!code) continue;
+        if (/^(SECTION|SECT|SEC|SECTIONS)$/.test(bare(w[n]))) n++;
+        var hit = keys[code + ' ' + bare(w[n])];
+        if (hit && code + ' ' + bare(w[n]) !== me) o.p = hit.s + ' ' + hit.x;
+      }
+    });
+  };
+  var tsv = function (list) { pairUp(list); return list.map(function (o) { return [o.s, o.x, o.d, o.t, o.r, o.i, o.p, o.l].join('\t'); }).join('\n'); };
+  var box = document.createElement('div'); box.id = 'ehx';
+  box.setAttribute('style', 'position:fixed;top:16px;right:16px;z-index:99999;width:320px;background:#fffdf8;color:#24203a;border:2px solid #5b4bb7;border-radius:16px;padding:14px 16px;font:14px/1.45 system-ui,sans-serif;box-shadow:0 12px 30px rgba(36,32,58,.25)');
+  var btn = 'border:0;border-radius:999px;padding:7px 13px;margin:6px 6px 0 0;font:600 13px system-ui,sans-serif;cursor:pointer;';
+  var term = form && form.applicablePeriod ? form.applicablePeriod.options[form.applicablePeriod.selectedIndex].text : '';
+  box.innerHTML = '<b style="color:#5b4bb7">Enlistment Hub \u2726 copy classes</b><div id="ehxm" style="margin:6px 0 2px">' + (term ? 'Term: <b>' + term + '</b>' : '') + '</div>'
+    + (shown ? '<button id="ehx1" style="' + btn + 'background:#eae7f7;color:#24203a">this list only</button>' : '')
+    + (form ? '<button id="ehx2" style="' + btn + 'background:#5b4bb7;color:#fff">every department (about a minute)</button>' : '')
+    + '<button id="ehxc" style="' + btn + 'background:#5b4bb7;color:#fff;display:none">copy</button><button id="ehx0" style="' + btn + 'background:none;color:#6b6683">close</button>';
+  document.body.appendChild(box);
+  var $m = function (h) { document.getElementById('ehxm').innerHTML = h; };
+  var ready = '', copyNow = function () {
+    var done = function () { $m('Copied! Open your term tab in the Google Sheet, click the first empty cell under Subject, and paste (Ctrl+V).'); };
+    var fb = function () { var a = document.createElement('textarea'); a.value = ready; document.body.appendChild(a); a.select(); var ok = false; try { ok = document.execCommand('copy'); } catch (e) {} a.remove(); if (ok) done(); else prompt('Copy this (Ctrl+C):', ready); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ready).then(done, fb); else fb();
+  };
+  var offer = function (n, stat, extra) {
+    var c = document.getElementById('ehxc'); c.style.display = 'inline-block'; c.textContent = 'copy ' + n + ' sections';
+    $m('<b>' + n + ' sections</b> ready' + (stat.grad ? ' (' + stat.grad + ' graduate class' + (stat.grad > 1 ? 'es' : '') + ' left out)' : '') + (extra || '') + '. Tap copy.');
+    ['ehx1', 'ehx2'].forEach(function (id) { var b = document.getElementById(id); if (b) b.style.display = 'none'; });
+  };
+  document.getElementById('ehx0').onclick = function () { box.remove(); };
+  document.getElementById('ehxc').onclick = copyNow;
+  if (shown) document.getElementById('ehx1').onclick = function () {
+    var trs = null, out = [], stat = { grad: 0, seen: {} };
+    try { if (window.jQuery && jQuery.fn.dataTable) trs = jQuery(shown).DataTable().rows().nodes().toArray(); } catch (e) {}
+    if (!trs) trs = Array.prototype.slice.call(shown.tBodies[0].rows);
+    read(shown, trs, out, stat); ready = tsv(out); offer(out.length, stat); copyNow();
+  };
+  if (form) document.getElementById('ehx2').onclick = async function () {
+    var period = form.applicablePeriod.value, depts = Array.prototype.map.call(form.deptCode.options, function (o) { return o.value; }).filter(function (v, i, a) { return v !== '**IE**' && a.indexOf(v) === i; });
+    var out = [], stat = { grad: 0, seen: {} }, failed = [];
+    this.disabled = true;
+    for (var n = 0; n < depts.length; n++) {
+      $m('Reading department ' + (n + 1) + ' of ' + depts.length + ' (' + depts[n] + ')\u2026 ' + out.length + ' sections so far');
+      try {
+        var res = await fetch(form.action, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ command: 'displayResults', applicablePeriod: period, deptCode: depts[n], subjCode: 'ALL' }).toString() });
+        var html = new TextDecoder('windows-1252').decode(await res.arrayBuffer());
+        var doc = new DOMParser().parseFromString(html, 'text/html'), tbl = doc.getElementById('example');
+        if (tbl && tbl.tBodies[0]) read(tbl, Array.prototype.slice.call(tbl.tBodies[0].rows), out, stat);
+      } catch (e) { failed.push(depts[n]); }
+      await new Promise(function (r) { setTimeout(r, 900); });
+    }
+    out.sort(function (a, b) { return a.s < b.s ? -1 : a.s > b.s ? 1 : a.x < b.x ? -1 : a.x > b.x ? 1 : 0; });
+    ready = tsv(out); offer(out.length, stat, failed.length ? '. Couldn\'t read: ' + failed.join(', ') : '');
+  };
 }
 (function () {
   const code = 'javascript:(' + aisisCopier.toString().replace(/\n\s*/g, ' ') + ')();void 0';
@@ -2314,7 +2379,7 @@ function aisisCopier() {
 })();
 
 /* ======================= Google Sheets sync: profiles & rooms ======================= */
-const SYNC_URL = 'https://script.google.com/macros/s/AKfycbw1FL9ma3mPFCzHabz89AVlWWySAPdQiQ79iiNbKD5aOpvNmrRso0bOWw5bgeOPa762/exec'; // ← paste your Apps Script web app URL (ends in /exec) between the quotes
+const SYNC_URL = ''; // ← paste your Apps Script web app URL (ends in /exec) between the quotes
 const SY = () => state.sync;
 const syncUrl = () => SYNC_URL || SY().url || '';
 const connected = () => !!(syncUrl() && SY().me && SY().mine);
