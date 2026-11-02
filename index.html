@@ -849,13 +849,13 @@ function parseScheduleSheet(aoa) {
     if (si < 0) continue;
     const find = (...names) => row.findIndex(c => names.includes(c));
     col = { subject: si, section: find('section'), days: find('day', 'days'), time: find('time'), room: find('room'),
-            instructor: find('instructor', 'professor', 'faculty'), pair: find('pair subject', 'pair'), forWho: find('for', 'open to', 'reserved for'), note: find('remarks', 'remark') };
+            instructor: find('instructor', 'professor', 'faculty'), pair: find('pair subject', 'pair'), forWho: find('for', 'open to', 'reserved for') };
     selCols = row.map((c, k) => (c === 'select' && k < si) ? k : -1).filter(k => k >= 0);
     if (col.forWho < 0) {   // sheet without "For"/"Remarks" headers but with those columns filled in (AISIS bookmark rows)
       let k = row.length; while (k > 0 && !row[k - 1]) k--;
       const vals = aoa.slice(r + 1).map(x => String((x || [])[k] ?? '').trim()).filter(Boolean);
       const FOR_RE = /^(some )?[A-Z][A-Z0-9 &\/-]*?( [\d,]+)?(; (some )?[A-Z][A-Z0-9 &\/-]*?( [\d,]+)?)*$/;
-      if (vals.length && vals.every(v => FOR_RE.test(v))) { col.forWho = k; if (col.note < 0) col.note = k + 1; }
+      if (vals.length && vals.every(v => FOR_RE.test(v))) col.forWho = k;
     }
     if (!selCols.length && si > 0 && si <= 4) selCols = [...Array(si).keys()];
   }
@@ -865,7 +865,7 @@ function parseScheduleSheet(aoa) {
     col = { subject: n, section: n + 1, days: n + 2, time: n + 3, room: n + 4, instructor: n + 5, pair: n + 7 };
     selCols = [...Array(n).keys()];
     if (aoa.every(row => row.length <= n + 7) || aoa.every(row => /^(eng|fil)?$/i.test(String(row[n + 7] ?? '').trim()))) col.pair = n + 6;
-    col.forWho = col.pair === n + 6 ? n + 8 : -1; col.note = col.pair === n + 6 ? n + 9 : -1;   // rows copied by the AISIS bookmark
+    col.forWho = col.pair === n + 6 ? n + 8 : -1;   // rows copied by the AISIS bookmark
   }
   selCols = selCols.slice(0, CONFIG.MAX_PEOPLE);
   const get = (row, i) => (i >= 0 && i < row.length) ? String(row[i] ?? '').trim() : '';
@@ -875,7 +875,7 @@ function parseScheduleSheet(aoa) {
     if (!subject || norm(subject) === 'subject') return;
     const r = { subject, section: get(row, col.section), days: get(row, col.days), time: get(row, col.time),
                 room: get(row, col.room), instructor: get(row, col.instructor), pair: get(row, col.pair),
-                forWho: get(row, col.forWho), note: /^⚠/.test(get(row, col.note)) ? '' : get(row, col.note),
+                forWho: get(row, col.forWho),
                 on: [0, 1, 2, 3].map(p => p < selCols.length && isTrue(row[selCols[p]])) };
     if (!r.section && !r.days && !r.time) return;
     if (r.pair.startsWith('⚠')) r.pair = '';
@@ -1152,21 +1152,33 @@ function compute() {
     ...picks[p].filter(j => j !== i && ov(i, j)).map(j => state.rows[j].subject),
     ...people()[p].busy.filter(b => bov(i, b)).map(b => b.label || 'busy time')])));
   const byKey = new Map(); state.rows.forEach((r, i) => { if (!byKey.has(keyOf(r))) byKey.set(keyOf(r), i); });
-  const tagSubs = new Set(); state.rows.forEach(r => { const k = norm(r.subject); if (/^nstp\b/.test(k) && r.pair && !norm(r.pair).startsWith(k + ' ')) tagSubs.add(k); });
+  const links = linksOf(byKey);
+  const addOnSubs = new Set(state.rows.filter((r, i) => isAddOnRow(r) && links[i].length).map(r => norm(r.subject)));
   const plans = [...Array(n)].map((_, p) => planOf(p, picks[p], conf));
-  return { parsed, ov, bov, picks, conf, byKey, plans, tagSubs };
+  return { parsed, ov, bov, picks, conf, byKey, plans, links, addOnSubs };
 }
-function pairIndex(i) {
-  const pair = norm(state.rows[i].pair);
-  if (!pair) return -1;
-  const k = C ? C.byKey.get(pair) : state.rows.findIndex(r => keyOf(r) === pair);
-  return (k === undefined || k < 0 || k === i) ? -1 : k;
+
+/* ======================= pairs (the Pair Subject column) =======================
+   A pair links two sections, whichever row it's written on.
+   · Two regular sections (lecture + lab): always picked and dropped together.
+   · NSTP + another section: NSTP is an add-on. You don't pick it from a list. Picking its partner
+     (THEO 12 J4, ECON 121 A, SocSc 13 B…) asks whether to add it, and dropping the partner drops it. */
+const isAddOnRow = r => /^nstp\b/.test(norm(r.subject));
+function linksOf(byKey) {
+  const links = state.rows.map(() => []);
+  state.rows.forEach((r, i) => {
+    const k = r.pair ? byKey.get(norm(r.pair)) : undefined;
+    if (k === undefined || k === i) return;
+    if (!links[i].includes(k)) links[i].push(k);
+    if (!links[k].includes(i)) links[k].push(i);
+  });
+  return links;
 }
-/* NSTP sections are tied to one section of another subject ("strictly paired with THEO12 J4").
-   They're not listed on their own: picking the partner section offers the NSTP section that goes with it. */
-const isTagSub = k => !!(C && C.tagSubs && C.tagSubs.has(k));
-const isTagRow = j => isTagSub(norm(state.rows[j].subject)) && pairIndex(j) >= 0;
-const ridersOf = i => state.rows.map((r, j) => j).filter(j => isTagRow(j) && pairIndex(j) === i);
+const isAddOn = i => isAddOnRow(state.rows[i]);
+const together = i => isAddOn(i) ? [] : C.links[i].filter(j => !isAddOn(j));     // lecture ↔ lab
+const addOnsOf = i => isAddOn(i) ? [] : C.links[i].filter(isAddOn);             // NSTP sections that go with this section
+const partnerOf = i => isAddOn(i) ? (C.links[i].find(j => !isAddOn(j)) ?? -1) : -1;
+const isAddOnSub = k => C.addOnSubs.has(k);
 function statusOf(p, subject) {
   const mine = C.picks[p].filter(j => norm(state.rows[j].subject) === norm(subject));
   if (!mine.length) return { st: 'missing', rows: [] };
@@ -1178,7 +1190,7 @@ function progressOf(p) {
 }
 /* what would clash if person p took row i (ignoring the section it would replace) */
 function clashPreview(i, p) {
-  const pk = pairIndex(i), check = pk >= 0 ? [i, pk] : [i];
+  const check = [i, ...together(i), partnerOf(i)].filter(x => x >= 0);
   const skip = new Set(check.map(x => norm(state.rows[x].subject)));
   return uniq([
     ...C.picks[p].filter(j => !skip.has(norm(state.rows[j].subject)) && check.some(x => C.ov(x, j))).map(j => state.rows[j].subject),
@@ -1188,20 +1200,21 @@ function setPick(i, p, val, msgs) {
   const r = state.rows[i];
   if (!!r.on[p] === val) return;
   r.on[p] = val;
-  if (!val) ridersOf(i).forEach(j => { if (state.rows[j].on[p]) { setPick(j, p, false, msgs); msgs.push(`removed ${rowLabel(state.rows[j])} too`); } });
   if (!val && people()[p].locks.includes(keyOf(r))) people()[p].locks = people()[p].locks.filter(k => k !== keyOf(r));
   if (val) {
     removeBackup(p, i);
     state.rows.forEach((o, k) => { if (k !== i && o.on[p] && norm(o.subject) === norm(r.subject)) { setPick(k, p, false, msgs); msgs.push(`switched ${r.subject} to ${r.section}`); } });
   }
-  const pk = pairIndex(i);
-  if (pk >= 0 && !!state.rows[pk].on[p] !== val && !(isTagRow(i) && !val)) { setPick(pk, p, val, msgs); if (val) msgs.push(`added its pair ${rowLabel(state.rows[pk])}`); }
+  const sync = (j, v, why) => { if (!!state.rows[j].on[p] !== v) { setPick(j, p, v, msgs); msgs.push(`${why} ${rowLabel(state.rows[j])}`); } };
+  together(i).forEach(j => sync(j, val, val ? 'added its pair' : 'removed its pair'));
+  if (!val) addOnsOf(i).forEach(j => sync(j, false, 'removed'));
+  if (val && partnerOf(i) >= 0) sync(partnerOf(i), true, 'added its partner');
 }
-/* after picking a section: offer the NSTP section that's paired with it, if you need NSTP and don't have one yet */
-async function offerRiders(i, p) {
+/* after picking a section: offer the NSTP section that goes with it, if you need NSTP and don't have one yet */
+async function offerAddOns(i, p) {
   const P = people()[p];
   const need = j => { const k = norm(state.rows[j].subject); return (planHas(p, k) || P.reqs.some(x => norm(x) === k)) && !state.rows.some(r => r.on[p] && norm(r.subject) === k); };
-  const rs = ridersOf(i).filter(need);
+  const rs = addOnsOf(i).filter(need);
   if (!rs.length) return;
   const r0 = state.rows[i];
   const res = await openModal(`<h3>${esc(rowLabel(r0))} comes with NSTP</h3><p>This section is paired with ${rs.length > 1 ? 'these NSTP sections' : 'an NSTP section'}. Add it so your NSTP is set too?</p>
@@ -1217,7 +1230,7 @@ function togglePick(i, p) {
   setPick(i, p, val, msgs);
   save(); render();
   toast(msgs.length ? `${N(p)}: ${uniq(msgs).join(' · ')}` : `${val ? 'added' : 'removed'} ${rowLabel(state.rows[i])}${val ? ` for ${N(p)}` : ''}`);
-  if (val) offerRiders(i, p);
+  if (val) offerAddOns(i, p);
 }
 /* Plan B / C backups and stars, stored as "subject section" keys so they survive edits */
 function backupList(p, subj) { return (people()[p].backups[norm(subj)] || []).filter(k => C.byKey.has(k)); }
@@ -1374,7 +1387,7 @@ function renderPeople() {
       <textarea class="ruled preqs" data-i="${i}" placeholder="MATH 21&#10;ENG 12&#10;IE 2&#10;Management Elective&#10;…">${esc(p.reqs.join('\n'))}</textarea>
       ${p.ipsAoa || p.ips ? `<div class="ipsline">📜 from ${esc(p.ipsName || 'your IPS')}${p.ips && p.ips.pick ? ` · <b>${esc(p.ips.pick)}</b> (matches the open tab)` : ''}${p.ips && p.ips.edits && p.ips.edits[p.ips.pick] ? ` · edited by hand <button class="btn link" data-act="ips-reset" data-i="${i}">↺ use the IPS list</button>` : ''}${p.ipsAoa || uniq(((p.ips && p.ips.blocks) || []).map(b => b.c)).length > 1 ? ` · <select data-side="${i}"><option value="L" ${p.side === 'L' ? 'selected' : ''}>left program</option><option value="R" ${p.side === 'R' ? 'selected' : ''}>right program</option></select>` : ''}</div>` : ''}
       <label class="field">🎓 Course & year · for classes reserved for certain courses</label>
-      <div class="row" style="margin:0; gap:8px"><input type="text" class="pprog" data-i="${i}" list="dlProgs" maxlength="20" placeholder="e.g. AB MEC" value="${esc(p.prog || '')}" style="flex:1; min-width:120px; text-transform:uppercase">
+      <div class="row" style="margin:0; gap:8px"><input type="text" class="pprog" data-i="${i}" list="dlProgs" maxlength="20" placeholder="e.g. AB MEC, SOSS, EC" value="${esc(p.prog || '')}" style="flex:1; min-width:120px; text-transform:uppercase">
         <select data-yr="${i}" style="width:auto">${['', '1', '2', '3', '4', '5'].map(y => `<option value="${y}" ${String(p.yr || '') === y ? 'selected' : ''}>${y ? ordinal(+y) + ' year' : `year: ${ipsYear(p) ? 'from your IPS (' + ordinal(ipsYear(p)) + ')' : 'from your IPS'}`}</option>`).join('')}</select></div>
       <label class="field">Busy times · org meetings, work, commute</label>
       <div class="chiplist">${p.busy.map((b, k) => `<span class="bchip">${esc(b.label)} · ${esc(busyText(b))}<button data-act="del-busy" data-i="${i}" data-b="${k}" aria-label="remove">✕</button></span>`).join('')}
@@ -1445,7 +1458,7 @@ function renderPick() {
   $$('#pickFilter button').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === f));
   $('#fitsBtn').setAttribute('aria-pressed', !!state.fitsOnly);
   $('#forBtn').setAttribute('aria-pressed', forMeOn(a));
-  $('#forBtn').textContent = P.prog ? `🎓 ${P.prog}${yearOf(a) ? ' ' + ordinal(yearOf(a)) : ''} only` : '🎓 my course';
+  $('#forBtn').textContent = P.prog ? `🎓 ${P.prog.split(',')[0].trim()}${yearOf(a) ? ' ' + ordinal(yearOf(a)) : ''} only` : '🎓 my course';
   $('#pickFilter [data-f=need]').textContent = N(a) === 'You' ? 'my subjects' : `${N(a)}'s subjects`;
   const q = norm($('#search').value), tq = timeQuery(q);
   const groups = new Map();
@@ -1483,10 +1496,10 @@ function renderPick() {
     const pill = st.st === 'ready' ? `<span class="pillst st-ready">✓ section ${esc(st.rows.map(j => state.rows[j].section).join(', '))}</span>`
                : st.st === 'conflict' ? `<span class="pillst st-conflict">⚠ clash</span>` : item ? `<span class="pillst st-missing">still needed</span>` : '';
     const tag = slot ? `<span class="chip">for ${esc(slotLabel(item.req))}${item.manual ? '' : item.suggested ? ' · from your IPS' : ' · auto'}</span>${chooseBtn}` : '';
-    if (g && isTagSub(k) && !state.showTag && !q) {
-      const mine = g.idx.find(i => state.rows[i].on[a]), partners = uniq(g.idx.map(i => pairIndex(i)).filter(j => j >= 0).map(j => state.rows[j].subject)).sort();
+    if (g && isAddOnSub(k) && !state.showTag && !q) {
+      const mine = g.idx.find(i => state.rows[i].on[a]), partners = uniq(g.idx.map(partnerOf).filter(j => j >= 0).map(j => state.rows[j].subject)).sort();
       html += `<div class="subj rv" style="--d:${Math.min(n++ * .04, .4)}s"><div class="subj-head"><h4>${esc(subj)}</h4>${mine !== undefined ? `<span class="pillst st-ready">✓ section ${esc(state.rows[mine].section)}</span>` : item ? '<span class="pillst st-missing">still needed</span>' : ''}</div>
-        <div class="sec-card" style="cursor:default; border-style:dashed"><span class="meta" style="font-size:14px">${mine !== undefined ? `${esc(rowLabel(state.rows[mine]))} · ${esc(whenText(C.parsed[mine], state.rows[mine]))}${pairIndex(mine) >= 0 ? ` · comes with <b>${esc(rowLabel(state.rows[pairIndex(mine)]))}</b>` : ''}`
+        <div class="sec-card" style="cursor:default; border-style:dashed"><span class="meta" style="font-size:14px">${mine !== undefined ? `${esc(rowLabel(state.rows[mine]))} · ${esc(whenText(C.parsed[mine], state.rows[mine]))}${partnerOf(mine) >= 0 ? ` · comes with <b>${esc(rowLabel(state.rows[partnerOf(mine)]))}</b>` : ''}`
           : `NSTP comes with a section of ${esc(partners.slice(0, 6).join(', '))}${partners.length > 6 ? ' and others' : ''}. Pick one of those, and its NSTP section pops up.`}</span>
           <button class="bk" data-act="tag-show" style="justify-self:start">show all ${g.idx.length} NSTP sections</button></div></div>`;
       return;
@@ -1517,13 +1530,14 @@ function forList(r) {
 }
 const progMatch = (want, prog) => !!want && (prog === want || prog.endsWith(' ' + want) || prog.replace(/\s+/g, '') === want.replace(/\s+/g, ''));
 /* 'open' (anyone), 'mine' (reserved, and you fit), 'other' (all slots reserved for other programs/years), 'unknown' (reserved, but no program set) */
+const myGroups = p => String((people()[p] || {}).prog || '').split(/[,;\/]+/).map(norm).filter(Boolean);   // "AB MEC, SOSS, EC"
 function enlistOf(i, p) {
   const all = forList(state.rows[i]).filter(e => e.all);
-  if (!all.length) return 'open';
-  const want = norm((people()[p] || {}).prog || ''), y = yearOf(p);
+  if (!all.length) return 'open';                 // nothing (or only "some slots") reserved: open to everyone
+  const mine = myGroups(p), y = yearOf(p);
   let unknown = false;
   for (const e of all) {   // "ANY 1" = 1st years of any program (from "FRESHMEN ONLY")
-    const progOk = e.prog === 'any' ? true : want ? progMatch(want, e.prog) : null;
+    const progOk = e.prog === 'any' ? true : mine.length ? mine.some(w => progMatch(w, e.prog)) : null;
     const yearOk = !e.years.length || (y ? e.years.includes(y) : null);
     if (progOk && yearOk) return 'mine';
     if ((progOk === null && yearOk !== false) || (yearOk === null && progOk !== false)) unknown = true;
@@ -1555,7 +1569,7 @@ function timeQuery(q) {
 function forChip(i, a) {
   const r = state.rows[i]; if (!r.forWho) return '';
   const en = enlistOf(i, a), all = forList(r).filter(e => e.all), some = forList(r).filter(e => !e.all);
-  const list = l => l.map(e => e.prog === 'any' ? e.years.map(ordinal).join('/') + ' years' : e.prog.toUpperCase() + (e.years.length ? ' ' + e.years.map(ordinal).join('/') : '')).join(', ');
+  const list = l => l.map(e => e.prog === 'any' ? (e.years.length ? e.years.map(ordinal).join('/') + ' years' : 'everyone') : e.prog.toUpperCase() + (e.years.length ? ' ' + e.years.map(ordinal).join('/') : '')).join(', ');
   if (en === 'mine') return `<span class="flag plan" title="${esc(r.forWho)}">🎓 for your course</span>`;
   if (en === 'other') return `<span class="flag warn" title="${esc(r.forWho)}">🎓 reserved for ${esc(trunc(list(all), 70))}</span>`;
   if (en === 'unknown') return `<span class="flag" title="${esc(r.forWho)}" style="background:var(--surface-2); color:var(--muted)">🎓 for ${esc(trunc(list(all), 70))} · set your ${people()[a].prog ? 'year' : 'course'} with the 🎓 button</span>`;
@@ -1578,7 +1592,7 @@ function secCard(i, a, bks) {
     <span class="meta">${[r.room ? esc(r.room) : '', r.instructor ? `<button class="profbtn" data-act="prof" data-i="${i}" title="see all of ${esc(r.instructor)}'s sections">${esc(r.instructor)}${pp === 'prefer' ? ' 👍' : pp === 'avoid' ? ' 👎' : ''}</button>` : ''].filter(Boolean).join(' · ')}${r.pair ? ` · 🔗 ${esc(r.pair)}` : ''}</span>
     ${others.length ? `<span class="withs">with ${others.map(p => crest(p, 'sm')).join('')}</span>` : ''}
     ${sNote ? `<span class="cardnote">📝 ${esc(trunc(sNote, 70))}</span>` : ''}${pNote ? `<span class="cardnote">🧑‍🏫 ${esc(trunc(pNote, 70))}</span>` : ''}
-    ${forChip(i, a)}${r.note ? `<span class="meta" title="${esc(r.note)}">ℹ ${esc(trunc(r.note, 90))}</span>` : ''}
+    ${forChip(i, a)}
     ${rNotes.map(n => `<span class="cardnote room">💬 ${esc(n.who)}: ${esc(n.text)}</span>`).join('')}
     ${rx && rx.list.length ? `<span class="reacts">${rx.list.map(x => `<span title="${esc(x.who.join(', '))}">${x.e} ${esc(x.who.join(', '))}</span>`).join('')}</span>` : ''}
     ${flag}
@@ -1643,13 +1657,16 @@ function combosFor(p, cap = CONFIG.BUILD_CAP) {
     for (const i of u.cands) {
       const sub = norm(rows[i].subject);
       if (assign[sub] !== undefined) continue;              // a subject counts only once
-      const pk = pairIndex(i), add = [i];
-      if (pk >= 0) {
-        const ps = norm(rows[pk].subject);
-        if (assign[ps] !== undefined) { if (assign[ps] !== pk) continue; }
-        else { const pu = units.find(v => v.subj === ps); if (pu && !pu.cands.includes(pk)) continue; if (!pu && (isTagRow(i) || !okRowFor(pk, p))) continue; add.push(pk); }
-      }
-      if (add.some(x => chosen.some(y => C.ov(x, y))) || (add.length === 2 && C.ov(add[0], add[1]))) continue;
+      // sections that must come along: its lab/lecture pair, or (for NSTP) its partner section
+      const add = [i]; let ok = true;
+      [...together(i), partnerOf(i)].filter(x => x >= 0).forEach(x => {
+        if (!ok) return;
+        const xs = norm(rows[x].subject), pu = units.find(v => v.subj === xs);
+        if (assign[xs] !== undefined) { if (assign[xs] !== x) ok = false; return; }   // already chosen: must be this exact section
+        if (pu ? !pu.cands.includes(x) : (isAddOn(i) || !okRowFor(x, p))) { ok = false; return; }   // NSTP only with a partner you're taking
+        add.push(x);
+      });
+      if (!ok || add.some(x => chosen.some(y => C.ov(x, y))) || add.some((x, k) => add.slice(k + 1).some(y => C.ov(x, y)))) continue;
       add.forEach(x => { assign[norm(rows[x].subject)] = x; chosen.push(x); });
       if (u.slot) slotOf[u.req] = rows[i].subject;
       rec(d + 1);
@@ -1986,7 +2003,7 @@ function renderCheck() {
   }).join('');
 }
 function cheatSheet(i) {
-  const p = people()[i], out = [`${N(i)}'s enlistment plan${state.sheetName ? ' · ' + state.sheetName : ''}`, ''];
+  const out = [`${N(i)}'s enlistment plan${state.sheetName ? ' · ' + state.sheetName : ''}`, ''];
   C.plans[i].items.forEach(x => {
     const a = x.rows.map(j => `${state.rows[j].section} (${whenText(C.parsed[j], state.rows[j])})`).join(', ') || '—';
     const bks = x.subject ? backupList(i, x.subject).map(k => state.rows[C.byKey.get(k)].section) : [];
@@ -2070,7 +2087,7 @@ async function saveDraft(p) {
 /* ======================= share links + QR ======================= */
 const b64enc = str => btoa(unescape(encodeURIComponent(str))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 function b64dec(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return decodeURIComponent(escape(atob(s))); }
-const rowArr = r => [r.subject, r.section, r.days, r.time, r.room, r.instructor, r.pair, r.forWho || '', r.note || ''];
+const rowArr = r => [r.subject, r.section, r.days, r.time, r.room, r.instructor, r.pair, r.forWho || ''];
 function shareCode(i) {
   const p = people()[i], bk = {};
   Object.entries(p.backups).forEach(([s, list]) => { if (list.length) bk[s] = list; });
@@ -2335,7 +2352,7 @@ async function pasteIps(i) {
 $('#peopleList').addEventListener('input', e => {
   const i = +e.target.dataset.i;
   if (e.target.matches('.pname')) { state.people[i].name = e.target.value.trim(); if (!state.people[i].emoji) e.target.parentElement.querySelector('.crest').textContent = N(i)[0].toUpperCase(); save(); }
-  else if (e.target.matches('.pprog')) { state.people[i].prog = e.target.value.trim().toUpperCase().replace(/\s+/g, ' '); save(); render(); }
+  else if (e.target.matches('.pprog')) { state.people[i].prog = e.target.value.toUpperCase().replace(/\s+/g, ' ').replace(/^ /, ''); save(); render(); }
   else if (e.target.matches('.preqs')) {
     const p = state.people[i]; p.reqs = lines(e.target.value);
     if (p.ips && p.ips.pick) { p.ips.edits = p.ips.edits || {}; p.ips.edits[p.ips.pick] = [...p.reqs]; }   // a hand edit for this term only; the rest of the IPS stays
@@ -2425,14 +2442,16 @@ function aisisCopier() {
   var slots = function (text) {
     var CLS = { FRESHMAN: '1', FRESHMEN: '1', SOPHOMORE: '2', SOPHOMORES: '2', JUNIOR: '3', JUNIORS: '3', SENIOR: '4,5', SENIORS: '4,5' };
     var groups = {}, order = [], add = function (k, ys) { if (!groups[k]) { groups[k] = []; order.push(k); } String(ys).split(',').forEach(function (y) { if (groups[k].indexOf(y) < 0) groups[k].push(y); }); };
-    var re = /(ALL|\d+)\s+SLOTS?(?:\s*\(S\))?\s+FOR\s+(?:(?:(\d)(?:ST|ND|RD|TH)\s+YEAR|(FRESHM[AE]N|SOPHOMORES?|JUNIORS?|SENIORS?))\s+)?([A-Z][A-Z0-9 &\/-]*?)\s+MAJORS?\b\.?/gi;
+    var re = /(ALL|\d+)\s+SLOTS?(?:\s*\(S\))?\s+FOR\s+(?:(?:(\d)(?:ST|ND|RD|TH)\s+YEAR|(FRESHM[AE]N|SOPHOMORES?|JUNIORS?|SENIORS?))\s*)?([A-Z][A-Z0-9 &\/-]*?)?\s*\b(MAJORS?|STUDENTS?|SPECIALI[SZ]ATION)\b\.?/gi;
     var re2 = /(?:(ALL|\d+)\s+SLOTS?(?:\s*\(S\))?\s+FOR\s+(FRESHM[AE]N|SOPHOMORES?|JUNIORS?|SENIORS?)\b(?:\s+ONLY)?|(?:\b(?:STRICTLY\s+)?FOR\s+)?\b(FRESHM[AE]N|SOPHOMORES?|JUNIORS?|SENIORS?)\s+ONLY\b)\.?/gi, m;
-    while ((m = re.exec(text))) add((m[1].toUpperCase() === 'ALL' ? '' : 'some ') + m[4].trim().toUpperCase().replace(/\s+/g, ' '), m[2] || (m[3] ? CLS[m[3].toUpperCase()] : '*'));
+    while ((m = re.exec(text))) {
+      var who = (m[4] || '').trim().toUpperCase().replace(/\s+/g, ' ');
+      if (/SPECIALI/i.test(m[5])) who = (who + ' SPECIALIZATION').trim();
+      add((m[1].toUpperCase() === 'ALL' ? '' : 'some ') + (who || 'ANY'), m[2] || (m[3] ? CLS[m[3].toUpperCase()] : '*'));
+    }
     var rest = String(text).replace(re, ' ');
     while ((m = re2.exec(rest))) add((m[1] && m[1].toUpperCase() !== 'ALL' ? 'some ' : '') + 'ANY', CLS[(m[2] || m[3]).toUpperCase()]);
-    var note = rest.replace(re2, ' ').replace(/\s+/g, ' ').replace(/^[\s.~]+|[\s~]+$/g, '').trim();
-    if (/^[.~\s]*$/.test(note)) note = '';
-    return { f: order.map(function (k) { var y = groups[k]; return k + (y.indexOf('*') < 0 ? ' ' + y.sort().join(',') : ''); }).join('; '), n: note.length > 200 ? note.slice(0, 197) + '...' : note };
+    return { f: order.map(function (k) { var y = groups[k]; return k + (y.indexOf('*') < 0 ? ' ' + y.sort().join(',') : ''); }).join('; ') };
   };
   var read = function (tbl, trs, out, stat) {
     var head = Array.prototype.map.call((tbl.tHead || tbl).rows[0].cells, function (c) { return c.textContent.trim().toLowerCase(); });
@@ -2452,19 +2471,22 @@ function aisisCopier() {
       if (stat.seen[key] && comp && stat.seen[key] !== comp) { sec = sec + ' ' + comp; key = (subj + ' ' + sec).toUpperCase(); }
       if (stat.seen[key]) return; stat.seen[key] = comp || 1;
       var sl = slots(g(C.k));
-      out.push({ s: subj, x: sec, d: w.days, t: w.time, r: room, i: inst, l: lang, k: g(C.k).toUpperCase(), p: '', f: sl.f, n: sl.n });
+      out.push({ s: subj, x: sec, d: w.days, t: w.time, r: room, i: inst, l: lang, k: g(C.k).toUpperCase(), p: '', f: sl.f });
     });
   };
   var pairUp = function (list) {
     var keys = {}, codes = {}, glued = {};
     list.forEach(function (o) { var c = o.s.toUpperCase(); keys[(o.s + ' ' + o.x).toUpperCase()] = o; codes[c] = c; glued[c.replace(/\s+/g, '')] = c; });
     var bare = function (t) { return (t || '').replace(/^[^A-Z0-9]+|[^A-Z0-9]+$/g, ''); };
+    var fuzzy = function (L, num) { if (!L || L.length < 3 || !num) return null; var hits = Object.keys(codes).filter(function (c) { var p = c.split(' '); return p.length === 2 && p[1] === num && (p[0].indexOf(L) === 0 || L.indexOf(p[0]) === 0); }); return hits.length === 1 ? hits[0] : null; };
     list.forEach(function (o) {
       var w = o.k.replace(/[(),;:*]/g, ' ').split(/\s+/).filter(Boolean), me = (o.s + ' ' + o.x).toUpperCase();
       for (var j = 0; j < w.length && !o.p; j++) {
         var code = null, n = j;
         if (j + 1 < w.length && codes[bare(w[j]) + ' ' + bare(w[j + 1])]) { code = bare(w[j]) + ' ' + bare(w[j + 1]); n = j + 2; }
         else if (glued[bare(w[j])]) { code = glued[bare(w[j])]; n = j + 1; }
+        else if (/^[A-Z]+$/.test(bare(w[j])) && j + 1 < w.length && (code = fuzzy(bare(w[j]), bare(w[j + 1])))) n = j + 2;
+        else { var gm = bare(w[j]).match(/^([A-Z]+)(\d[\w.]*)$/); if (gm && (code = fuzzy(gm[1], gm[2]))) n = j + 1; }
         if (!code) continue;
         if (/^(SECTION|SECT|SEC|SECTIONS)$/.test(bare(w[n]))) n++;
         var hit = keys[code + ' ' + bare(w[n])];
@@ -2472,7 +2494,7 @@ function aisisCopier() {
       }
     });
   };
-  var tsv = function (list) { pairUp(list); return list.map(function (o) { return [o.s, o.x, o.d, o.t, o.r, o.i, o.p, o.l, o.f, o.n].join('\t'); }).join('\n'); };
+  var tsv = function (list) { pairUp(list); return list.map(function (o) { return [o.s, o.x, o.d, o.t, o.r, o.i, o.p, o.l, o.f].join('\t'); }).join('\n'); };
   var box = document.createElement('div'); box.id = 'ehx';
   box.setAttribute('style', 'position:fixed;top:16px;right:16px;z-index:99999;width:320px;background:#fffdf8;color:#24203a;border:2px solid #5b4bb7;border-radius:16px;padding:14px 16px;font:14px/1.45 system-ui,sans-serif;box-shadow:0 12px 30px rgba(36,32,58,.25)');
   var btn = 'border:0;border-radius:999px;padding:7px 13px;margin:6px 6px 0 0;font:600 13px system-ui,sans-serif;cursor:pointer;';
@@ -3271,12 +3293,13 @@ $('#forBtn').addEventListener('click', async () => {
     if (!canEdit(a)) return;
     const progs = uniq(state.rows.flatMap(r => forList(r).map(e => e.prog.toUpperCase()))).filter(x => x !== 'ANY').sort();
     const res = await openModal(`<h3>🎓 ${N(a) === 'You' ? 'Your' : esc(N(a)) + '\'s'} course</h3><p>Sections reserved for other courses or years get hidden. Type it the way AISIS writes it.</p>
-      <input type="text" data-field="prog" list="dlProgs2" placeholder="e.g. AB MEC" autofocus style="margin-top:10px; text-transform:uppercase">
+      <input type="text" data-field="prog" list="dlProgs2" placeholder="e.g. AB MEC, SOSS, EC" autofocus style="margin-top:10px; text-transform:uppercase">
+      <p class="hint" style="margin:6px 0 0">Some classes are reserved by school or department instead (like "SOM STUDENTS" or "EC STUDENTS"). Add yours after a comma so those count too.</p>
       <datalist id="dlProgs2">${progs.map(x => `<option value="${esc(x)}">`).join('')}</datalist>
       <label class="field">Year</label><select data-field="yr">${['', '1', '2', '3', '4', '5'].map(y => `<option value="${y}" ${String(P.yr || '') === y ? 'selected' : ''}>${y ? ordinal(+y) + ' year' : ipsYear(P) ? 'from your IPS (' + ordinal(ipsYear(P)) + ')' : 'from your IPS'}</option>`).join('')}</select>
       <div class="row"><button class="btn small" data-choice="ok">filter</button><button class="btn small ghost" data-choice="">cancel</button></div>`);
     if (!res || res.choice !== 'ok' || !(res.prog || '').trim()) return;
-    P.prog = res.prog.trim().toUpperCase().replace(/\s+/g, ' '); P.yr = res.yr || ''; state.forMe = true;
+    P.prog = res.prog.trim().toUpperCase().replace(/\s+/g, ' ').replace(/\s*,\s*/g, ', '); P.yr = res.yr || ''; state.forMe = true;
     save(); syncSetup(); render(); return;
   }
   state.forMe = state.forMe === false; save(); render();
