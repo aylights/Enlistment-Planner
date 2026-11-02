@@ -2510,7 +2510,7 @@ function aisisCopier() {
   box.innerHTML = '<b style="color:#5b4bb7">Enlistment Hub \u2726 copy classes</b><div id="ehxm" style="margin:6px 0 2px">' + (term ? 'Term: <b>' + term + '</b>' : '') + '</div>'
     + (shown ? '<button id="ehx1" style="' + btn + 'background:#eae7f7;color:#24203a">this list only</button>' : '')
     + (form ? '<button id="ehx2" style="' + btn + 'background:#5b4bb7;color:#fff">every department (about a minute)</button>' : '')
-    + '<button id="ehxc" style="' + btn + 'background:#5b4bb7;color:#fff;display:none">copy</button><button id="ehx0" style="' + btn + 'background:none;color:#6b6683">close</button>';
+    + '<button id="ehxc" style="' + btn + 'background:#5b4bb7;color:#fff;display:none">copy</button><button id="ehxr" style="' + btn + 'background:#eae7f7;color:#24203a;display:none">retry</button><button id="ehx0" style="' + btn + 'background:none;color:#6b6683">close</button>';
   document.body.appendChild(box);
   var $m = function (h) { document.getElementById('ehxm').innerHTML = h; };
   var ready = '', copyNow = function () {
@@ -2533,24 +2533,55 @@ function aisisCopier() {
   };
   if (form) document.getElementById('ehx2').onclick = async function () {
     var period = form.applicablePeriod.value, depts = Array.prototype.map.call(form.deptCode.options, function (o) { return o.value; }).filter(function (v, i, a) { return v !== '**IE**' && a.indexOf(v) === i; });
-    var out = [], stat = { grad: 0, seen: {} }, failed = [], empty = [];
+    var out = [], stat = { grad: 0, seen: {} }, empty = [], counts = {};
+    var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+    var getDept = async function (dept) {
+      var last = null;
+      for (var t = 0; t < 4; t++) {
+        try {
+          var ctl = new AbortController(), timer = setTimeout(function () { ctl.abort(); }, 25000);
+          var res = await fetch(form.action, { method: 'POST', credentials: 'same-origin', signal: ctl.signal, headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ command: 'displayResults', applicablePeriod: period, deptCode: dept, subjCode: 'ALL' }).toString() });
+          clearTimeout(timer);
+          if (!res.ok) throw new Error('AISIS answered ' + res.status);
+          var doc = new DOMParser().parseFromString(new TextDecoder('windows-1252').decode(await res.arrayBuffer()), 'text/html');
+          var f = doc.forms.classScheduleForm, tbl = doc.getElementById('example');
+          if (!f || !f.deptCode) throw new Error('not the class schedule page');
+          if (f.deptCode.value !== dept || (f.applicablePeriod && f.applicablePeriod.value !== period)) throw new Error('AISIS sent a different department or term');
+          return tbl && tbl.tBodies[0] ? tbl : null;
+        } catch (e) { last = e; await sleep(1500 * (t + 1)); }
+      }
+      throw last || new Error('failed');
+    };
+    var run = async function (list, label) {
+      var bad = [];
+      for (var n = 0; n < list.length; n++) {
+        $m(label + ' department ' + (n + 1) + ' of ' + list.length + ' (' + list[n] + ')\u2026 ' + out.length + ' sections so far');
+        try {
+          var tbl = await getDept(list[n]), before = stat.raw || 0;
+          if (tbl) read(tbl, Array.prototype.slice.call(tbl.tBodies[0].rows), out, stat);
+          counts[list[n]] = (stat.raw || 0) - before;
+          if (!counts[list[n]] && empty.indexOf(list[n]) < 0) empty.push(list[n]);
+        } catch (e) { bad.push(list[n]); }
+        await sleep(900);
+      }
+      return bad;
+    };
+    var finish = function (bad) {
+      out.sort(function (a, b) { return a.s < b.s ? -1 : a.s > b.s ? 1 : a.x < b.x ? -1 : a.x > b.x ? 1 : 0; });
+      ready = tsv(out);
+      var okN = depts.length - bad.length;
+      offer(out.length, stat, '. Read ' + okN + ' of ' + depts.length + ' departments' + (bad.length ? '. Still couldn\'t read: ' + bad.join(', ') + ' (tap retry, or copy now and add them later with "this list only")' : ' \u2713') + (empty.length ? '. No classes listed in: ' + empty.join(', ') : ''));
+      var rb = document.getElementById('ehxr');
+      rb.style.display = bad.length ? 'inline-block' : 'none';
+      rb.onclick = async function () { rb.style.display = 'none'; document.getElementById('ehxc').style.display = 'none'; finish(await run(bad, 'Retrying')); };
+    };
     this.disabled = true;
-    for (var n = 0; n < depts.length; n++) {
-      $m('Reading department ' + (n + 1) + ' of ' + depts.length + ' (' + depts[n] + ')\u2026 ' + out.length + ' sections so far');
-      try {
-        var res = await fetch(form.action, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ command: 'displayResults', applicablePeriod: period, deptCode: depts[n], subjCode: 'ALL' }).toString() });
-        var html = new TextDecoder('windows-1252').decode(await res.arrayBuffer());
-        var doc = new DOMParser().parseFromString(html, 'text/html'), tbl = doc.getElementById('example');
-        var before = stat.raw || 0;
-        if (tbl && tbl.tBodies[0]) read(tbl, Array.prototype.slice.call(tbl.tBodies[0].rows), out, stat);
-        if ((stat.raw || 0) === before) empty.push(depts[n]);
-      } catch (e) { failed.push(depts[n]); }
-      await new Promise(function (r) { setTimeout(r, 900); });
-    }
-    out.sort(function (a, b) { return a.s < b.s ? -1 : a.s > b.s ? 1 : a.x < b.x ? -1 : a.x > b.x ? 1 : 0; });
-    ready = tsv(out); offer(out.length, stat, (failed.length ? '. Couldn\'t read: ' + failed.join(', ') : '') + (empty.length ? '. No classes in: ' + empty.join(', ') : ''));
+    var bad = await run(depts, 'Reading');
+    if (bad.length) { $m('Trying ' + bad.length + ' department' + (bad.length > 1 ? 's' : '') + ' again\u2026'); await sleep(4000); bad = await run(bad, 'Second try:'); }
+    finish(bad);
   };
+
 }
 (function () {
   const code = 'javascript:(' + aisisCopier.toString().replace(/\n\s*/g, ' ') + ')();void 0';
