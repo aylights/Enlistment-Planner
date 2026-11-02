@@ -261,6 +261,8 @@
   .flag.plan { background: var(--note); color: var(--ink); font-family: var(--hand); font-size: 18px; padding: 0 9px; margin: 0; transform: rotate(-3deg); }
   .cardfoot { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
   #modal [hidden] { display: none !important; }
+  #forSel { width: auto; border-radius: 999px; font-weight: 700; font-size: 14px; padding: 7px 12px; }
+  #forSel.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
   .profbtn { border: none; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
   .profbtn:hover { color: var(--accent); }
   .fitchip { font-size: 12px; font-weight: 700; border-radius: 999px; padding: 1px 8px; margin-left: 6px; white-space: nowrap; background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
@@ -570,7 +572,8 @@
               <button data-f="picked" aria-pressed="false">picked</button>
               <button data-f="starred" aria-pressed="false">★</button>
             </div>
-            <div class="seg" role="group"><button id="fitsBtn" aria-pressed="false" title="hide sections that clash with what's already picked or with busy times">✓ only what fits</button><button id="forBtn" aria-pressed="false" title="hide sections reserved for other courses or years">🎓 my course</button></div>
+            <div class="seg" role="group"><button id="fitsBtn" aria-pressed="false" title="hide sections that clash with what's already picked or with busy times">✓ only what fits</button></div>
+            <select id="forSel" aria-label="filter by course and year" title="hide sections reserved for other courses or years"></select>
             <input type="text" id="search" placeholder="🔎 subject, prof, or a time like tue 2pm">
           </div>
           <div id="pickList"></div>
@@ -1457,8 +1460,11 @@ function renderPick() {
   if (f === 'need' && !reqs.length) f = 'all';
   $$('#pickFilter button').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === f));
   $('#fitsBtn').setAttribute('aria-pressed', !!state.fitsOnly);
-  $('#forBtn').setAttribute('aria-pressed', forMeOn(a));
-  $('#forBtn').textContent = P.prog ? `🎓 ${P.prog.split(',')[0].trim()}${yearOf(a) ? ' ' + ordinal(yearOf(a)) : ''} only` : '🎓 my course';
+  const c = P.prog ? P.prog.split(',')[0].trim() : '', y = yearOf(a) ? ordinal(yearOf(a)) + ' year' : '', mode = forMode();
+  const opt = (v, label) => `<option value="${v}" ${v === mode ? 'selected' : ''}>${label}</option>`;
+  $('#forSel').innerHTML = opt('both', `🎓 ${c ? c : 'my course'}${y ? ' · ' + y : ''}`) + opt('course', `🎓 ${c || 'my course'} only, any year`) + opt('year', `🎓 ${y || 'my year'} only, any course`)
+    + opt('off', '🎓 every course & year') + `<option value="edit">✎ ${c ? 'change' : 'set'} course & year…</option>`;
+  $('#forSel').classList.toggle('on', forMeOn(a));
   $('#pickFilter [data-f=need]').textContent = N(a) === 'You' ? 'my subjects' : `${N(a)}'s subjects`;
   const q = norm($('#search').value), tq = timeQuery(q);
   const groups = new Map();
@@ -1531,20 +1537,22 @@ function forList(r) {
 const progMatch = (want, prog) => !!want && (prog === want || prog.endsWith(' ' + want) || prog.replace(/\s+/g, '') === want.replace(/\s+/g, ''));
 /* 'open' (anyone), 'mine' (reserved, and you fit), 'other' (all slots reserved for other programs/years), 'unknown' (reserved, but no program set) */
 const myGroups = p => String((people()[p] || {}).prog || '').split(/[,;\/]+/).map(norm).filter(Boolean);   // "AB MEC, SOSS, EC"
+/* which half of a reservation counts: course + year, just the course, or just the year */
+const forMode = () => state.forMode || (state.forMe === false ? 'off' : 'both');
 function enlistOf(i, p) {
   const all = forList(state.rows[i]).filter(e => e.all);
   if (!all.length) return 'open';                 // nothing (or only "some slots") reserved: open to everyone
-  const mine = myGroups(p), y = yearOf(p);
+  const mode = forMode(), mine = mode === 'year' ? ['*'] : myGroups(p), y = mode === 'course' ? -1 : yearOf(p);
   let unknown = false;
   for (const e of all) {   // "ANY 1" = 1st years of any program (from "FRESHMEN ONLY")
-    const progOk = e.prog === 'any' ? true : mine.length ? mine.some(w => progMatch(w, e.prog)) : null;
-    const yearOk = !e.years.length || (y ? e.years.includes(y) : null);
+    const progOk = e.prog === 'any' || mine[0] === '*' ? true : mine.length ? mine.some(w => progMatch(w, e.prog)) : null;
+    const yearOk = !e.years.length || y === -1 || (y ? e.years.includes(y) : null);
     if (progOk && yearOk) return 'mine';
     if ((progOk === null && yearOk !== false) || (yearOk === null && progOk !== false)) unknown = true;
   }
   return unknown ? 'unknown' : 'other';
 }
-const forMeOn = p => state.forMe !== false && !!(people()[p] && (people()[p].prog || yearOf(p)));
+const forMeOn = p => { const m = forMode(), P = people()[p]; return !!P && (m === 'both' ? !!(P.prog || yearOf(p)) : m === 'course' ? !!P.prog : m === 'year' ? !!yearOf(p) : false); };
 const blockedFor = (i, p) => forMeOn(p) && !state.rows[i].on[p] && enlistOf(i, p) === 'other';
 
 /* "tue 2pm", "sat", "mon thu 9:30", "1400" → which days and what time to look for */
@@ -1572,7 +1580,7 @@ function forChip(i, a) {
   const list = l => l.map(e => e.prog === 'any' ? (e.years.length ? e.years.map(ordinal).join('/') + ' years' : 'everyone') : e.prog.toUpperCase() + (e.years.length ? ' ' + e.years.map(ordinal).join('/') : '')).join(', ');
   if (en === 'mine') return `<span class="flag plan" title="${esc(r.forWho)}">🎓 for your course</span>`;
   if (en === 'other') return `<span class="flag warn" title="${esc(r.forWho)}">🎓 reserved for ${esc(trunc(list(all), 70))}</span>`;
-  if (en === 'unknown') return `<span class="flag" title="${esc(r.forWho)}" style="background:var(--surface-2); color:var(--muted)">🎓 for ${esc(trunc(list(all), 70))} · set your ${people()[a].prog ? 'year' : 'course'} with the 🎓 button</span>`;
+  if (en === 'unknown') return `<span class="flag" title="${esc(r.forWho)}" style="background:var(--surface-2); color:var(--muted)">🎓 for ${esc(trunc(list(all), 70))} · set your ${people()[a].prog ? 'year' : 'course'} in the 🎓 menu</span>`;
   return some.length ? `<span class="meta" title="${esc(r.forWho)}">🎓 some slots for ${esc(trunc(list(some), 70))}</span>` : '';
 }
 const meetsAt = (i, tq) => C.parsed[i].some(ps => (!tq.days.length || ps.days.some(d => tq.days.includes(d))) && (tq.min === null || (ps.s <= tq.min && ps.e > tq.min)));
@@ -3287,22 +3295,27 @@ function switchTab(t) {
 $$('[data-tab]').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
 $$('[data-theme-set]').forEach(b => b.addEventListener('click', () => { state.theme = b.dataset.themeSet; save(); applyTheme(); }));
 $('#fitsBtn').addEventListener('click', () => { state.fitsOnly = !state.fitsOnly; save(); render(); });
-$('#forBtn').addEventListener('click', async () => {
-  const a = state.active, P = people()[a];
-  if (!P.prog) {
-    if (!canEdit(a)) return;
-    const progs = uniq(state.rows.flatMap(r => forList(r).map(e => e.prog.toUpperCase()))).filter(x => x !== 'ANY').sort();
-    const res = await openModal(`<h3>🎓 ${N(a) === 'You' ? 'Your' : esc(N(a)) + '\'s'} course</h3><p>Sections reserved for other courses or years get hidden. Type it the way AISIS writes it.</p>
-      <input type="text" data-field="prog" list="dlProgs2" placeholder="e.g. AB MEC, SOSS, EC" autofocus style="margin-top:10px; text-transform:uppercase">
-      <p class="hint" style="margin:6px 0 0">Some classes are reserved by school or department instead (like "SOM STUDENTS" or "EC STUDENTS"). Add yours after a comma so those count too.</p>
-      <datalist id="dlProgs2">${progs.map(x => `<option value="${esc(x)}">`).join('')}</datalist>
-      <label class="field">Year</label><select data-field="yr">${['', '1', '2', '3', '4', '5'].map(y => `<option value="${y}" ${String(P.yr || '') === y ? 'selected' : ''}>${y ? ordinal(+y) + ' year' : ipsYear(P) ? 'from your IPS (' + ordinal(ipsYear(P)) + ')' : 'from your IPS'}</option>`).join('')}</select>
-      <div class="row"><button class="btn small" data-choice="ok">filter</button><button class="btn small ghost" data-choice="">cancel</button></div>`);
-    if (!res || res.choice !== 'ok' || !(res.prog || '').trim()) return;
-    P.prog = res.prog.trim().toUpperCase().replace(/\s+/g, ' ').replace(/\s*,\s*/g, ', '); P.yr = res.yr || ''; state.forMe = true;
-    save(); syncSetup(); render(); return;
-  }
-  state.forMe = state.forMe === false; save(); render();
+async function askCourse(a) {
+  const P = people()[a];
+  if (!canEdit(a)) return false;
+  const progs = uniq(state.rows.flatMap(r => forList(r).map(e => e.prog.toUpperCase()))).filter(x => x !== 'ANY').sort();
+  const res = await openModal(`<h3>🎓 ${N(a) === 'You' ? 'Your' : esc(N(a)) + '\'s'} course & year</h3><p>Sections reserved for other courses or years can be hidden. Type your course the way AISIS writes it.</p>
+    <input type="text" data-field="prog" list="dlProgs2" value="${esc(P.prog || '')}" placeholder="e.g. AB MEC, SOSS, EC" autofocus style="margin-top:10px; text-transform:uppercase">
+    <p class="hint" style="margin:6px 0 0">Some classes are reserved by school or department instead (like "SOM STUDENTS" or "EC STUDENTS"). Add yours after a comma so those count too.</p>
+    <datalist id="dlProgs2">${progs.map(x => `<option value="${esc(x)}">`).join('')}</datalist>
+    <label class="field">Year</label><select data-field="yr">${['', '1', '2', '3', '4', '5'].map(y => `<option value="${y}" ${String(P.yr || '') === y ? 'selected' : ''}>${y ? ordinal(+y) + ' year' : ipsYear(P) ? 'from your IPS (' + ordinal(ipsYear(P)) + ')' : 'from your IPS'}</option>`).join('')}</select>
+    <div class="row"><button class="btn small" data-choice="ok">save</button><button class="btn small ghost" data-choice="">cancel</button></div>`);
+  if (!res || res.choice !== 'ok') return false;
+  P.prog = (res.prog || '').trim().toUpperCase().replace(/\s+/g, ' ').replace(/\s*,\s*/g, ', '); P.yr = res.yr || '';
+  save(); syncSetup(); return true;
+}
+$('#forSel').addEventListener('change', async e => {
+  const a = state.active, P = people()[a], v = e.target.value;
+  if (v === 'edit' || ((v === 'both' || v === 'course') && !P.prog) || (v === 'year' && !yearOf(a))) {
+    const ok = await askCourse(a);
+    if (ok && v !== 'edit') state.forMode = v;
+  } else state.forMode = v;
+  save(); render();
 });
 $('#pickFilter').addEventListener('click', e => { const b = e.target.closest('[data-f]'); if (!b) return; state.pickFilter = b.dataset.f; save(); render(); });
 $('#search').addEventListener('input', () => render());
@@ -3472,7 +3485,7 @@ document.addEventListener('click', async e => {
     case 'check-sort': state.checkSort = el.dataset.v; save(); return render();
     case 'fits-off': state.fitsOnly = false; save(); return render();
     case 'tag-show': state.showTag = true; render(); return toast('showing NSTP sections · they hide again when you leave Pick');
-    case 'for-off': state.forMe = false; save(); render(); return toast('showing every section · tap 🎓 to hide the reserved ones again');
+    case 'for-off': state.forMode = 'off'; save(); render(); return toast('showing every course & year · change it in the 🎓 menu');
     case 'tips': return showTips();
     case 'show-straight': state.hideStraight = false; save(); render(); return toast('"classes straight" reminders are back');
     case 'hide-straight': state.hideStraight = true; save(); render(); return toast('hidden · turn it back on in Auto-build', { label: 'undo', fn: () => { state.hideStraight = false; save(); render(); } });
