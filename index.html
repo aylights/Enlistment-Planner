@@ -323,6 +323,7 @@
   .blk.clash { box-shadow: 0 0 0 2px var(--bad); }
   .blk.busy { pointer-events: none; }
   .blk .s { font-weight: 500; opacity: .85; }
+  .blk .pf { font-style: italic; }
   .tl.one .blk { font-size: 13px; padding: 6px 9px; white-space: normal; }
   .slotmark { position: absolute; left: 0; right: 0; height: 2px; background: var(--accent); pointer-events: none; z-index: 4; }
   .slotmark::before { content: ""; position: absolute; left: -4px; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
@@ -1840,7 +1841,7 @@ function renderWeek() {
     ln.set.forEach(i => {
       const r = state.rows[i], clash = ln.clashIn ? ln.set.some(j => j !== i && C.ov(i, j)) : C.conf[i][p].length > 0;
       C.parsed[i].forEach(ps => ps.days.forEach(d => cols[d].push(`<div class="blk${clash ? ' clash' : ''}" style="${pv(ln.color)}; ${pos(ps.s, ps.e, lane)}"
-        data-act="goto" data-i="${i}" data-p="${p}" title="${esc(`${ln.label} · ${rowLabel(r)} · ${fmtRange(ps.s, ps.e)}${r.room ? ' · ' + r.room : ''}`)}">${esc(r.subject)}<br><span class="s">${esc(r.section)}${wd >= 0 && r.room ? ' · ' + esc(r.room) : ''}</span></div>`)));
+        data-act="goto" data-i="${i}" data-p="${p}" title="${esc(`${ln.label} · ${rowLabel(r)} · ${fmtRange(ps.s, ps.e)}${r.room ? ' · ' + r.room : ''}${r.instructor ? ' · ' + r.instructor : ''}`)}">${esc(r.subject)} ${esc(r.section)}${r.room ? `<br><span class="s">${esc(r.room)}</span>` : ''}${profShort(r.instructor, wd >= 0) ? `<br><span class="s pf">${esc(profShort(r.instructor, wd >= 0))}</span>` : ''}</div>`)));
     });
   });
   if (!dsel.length && shown.length > 1) freeTogether(shown, E).forEach((g, d) => g.forEach(([s0, e0]) => cols[d].unshift(`<div class="freeblk" style="top:${(s0 - S * 60) / 60 * H}px; height:${(e0 - s0) / 60 * H}px" title="everyone shown is free ${fmtRange(s0, e0)}"><span>free together</span></div>`)));
@@ -1903,6 +1904,14 @@ function renderDraftStats(dp, dsel) {
         ${o.freeWeekday ? '<span class="chip good">🌿 a weekday free</span>' : ''}${runs.length ? `<span class="chip">😵 ${Math.max(...runs.map(r => r.items.length))} straight</span>` : ''}${clashes ? `<span class="chip" style="color:var(--bad)">⚠ ${clashes} clashing</span>` : ''}</div>
     </div>`;
   }).join('');
+}
+/* "MAGANTE, Maire Carroline" → "Magante" (or the full name when there's room); TBA → nothing */
+function profShort(name, full) {
+  const n = String(name || '').trim();
+  if (!n || /^TBA\b/i.test(n)) return '';
+  if (full) return n;
+  const last = n.split(',')[0].trim();
+  return last === last.toUpperCase() ? last.toLowerCase().replace(/(^|[\s\-'])\p{L}/gu, m => m.toUpperCase()) : last;
 }
 function renderSlot() {
   const el = $('#slotPanel');
@@ -2210,10 +2219,11 @@ async function saveImage(list) {
     if (b.busy) { g.save(); g.clip(); g.strokeStyle = COLORS[b.p].cs; g.lineWidth = 5; for (let t = -h; t < w; t += 12) { g.beginPath(); g.moveTo(x + t, y + h); g.lineTo(x + t + h, y); g.stroke(); } g.restore(); rr(x, y, w, h, 10); g.setLineDash([6, 4]); g.strokeStyle = COLORS[b.p].c; g.lineWidth = 2; g.stroke(); g.setLineDash([]); }
     else { g.fillStyle = COLORS[b.p].cs; g.fill(); g.strokeStyle = COLORS[b.p].c; g.lineWidth = 2; g.stroke(); }
     g.save(); rr(x, y, w, h, 10); g.clip(); g.fillStyle = COLORS[b.p].cd;
-    g.font = `800 ${small ? 13 : 16}px "Bricolage Grotesque", sans-serif`; g.fillText(b.busy || b.r.subject, x + 8, y + 21);
+    g.font = `800 ${small ? 13 : 16}px "Bricolage Grotesque", sans-serif`; g.fillText(b.busy || `${b.r.subject} ${b.r.section}`, x + 8, y + 21);
     g.font = `500 ${small ? 12 : 14}px "DM Sans", sans-serif`;
-    if (!b.busy) g.fillText(`${b.r.section}${b.r.room ? ' · ' + b.r.room : ''}`, x + 8, y + 39);
-    g.fillText(fmtRange(b.s, b.e), x + 8, y + (b.busy ? 39 : 56));
+    const lines = b.busy ? [] : [b.r.room, profShort(b.r.instructor, false)].filter(Boolean);
+    lines.push(fmtRange(b.s, b.e));
+    lines.forEach((t, k) => g.fillText(t, x + 8, y + 39 + k * 17));
     g.restore();
   });
   g.font = '700 24px Caveat, cursive'; g.fillStyle = col.muted; g.fillText('made with Enlistment Hub ✎', pad, H - 30);
