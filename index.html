@@ -1626,13 +1626,17 @@ function combosFor(p, cap = CONFIG.BUILD_CAP) {
   const prep = list => {
     const lk = list.filter(i => isLocked(i, p));
     if (lk.length) return lk;                     // a locked section is a must: it skips every filter
-    let l = list.filter(i => okRowFor(i, p));
+    let l = list.filter(i => !isAddOn(i) && okRowFor(i, p));
     if (b.keep) { const cur = l.filter(i => rows[i].on[p]); if (cur.length) l = cur; }
     return l.sort((x, y) => favOf(y, p) - favOf(x, p));
   };
-  // a "unit" is one IPS line: a fixed subject, or an elective that may be filled by any matching subject
+  // a "unit" is one IPS line: a fixed subject, or an elective that may be filled by any matching subject.
+  // NSTP isn't a unit: it's added afterwards, from the section it comes with (see "addOn" below).
   const units = [], missing = [];
+  const addOnSub = plan.items.filter(x => x.subject && isAddOnSub(norm(x.subject))).map(x => norm(x.subject))[0] || null;
+  const addOnFor = i => addOnsOf(i).filter(j => norm(rows[j].subject) === addOnSub);
   plan.items.forEach(x => {
+    if (addOnSub && x.subject && norm(x.subject) === addOnSub) return;
     if (x.kind === 'fixed' || x.manual) {
       const sub = norm(x.subject), all = sectionsOf(sub);
       if (!all.length) return missing.push(x.req);
@@ -1644,6 +1648,11 @@ function combosFor(p, cap = CONFIG.BUILD_CAP) {
       units.push({ subj: null, req: x.req, slot: true, cands: prep(all) });
     }
   });
+  // needing NSTP means one of the sections must come with an NSTP section: if only one of your subjects can,
+  // only its NSTP-paired sections are tried (an ECON 121 section without NSTP isn't suggested)
+  const nstpUnits = addOnSub ? units.filter(u => u.cands.some(i => addOnFor(i).length)) : [];
+  if (addOnSub && !nstpUnits.length) missing.push(`${addOnSub.toUpperCase()} (none of your subjects has a section that comes with it)`);
+  if (nstpUnits.length === 1) nstpUnits[0].cands = nstpUnits[0].cands.filter(i => addOnFor(i).length);
   const blocked = units.filter(u => !u.cands.length).map(u => u.req);
   if (blocked.length) return { results: [], missing, blocked };
   units.sort((u, v) => u.cands.length - v.cands.length);
@@ -1653,10 +1662,16 @@ function combosFor(p, cap = CONFIG.BUILD_CAP) {
     if (results.length >= cap || leaves >= cap * 4) return;
     if (d === units.length) {
       leaves++;
-      const sig = [...chosen].sort((x, y) => x - y).join(',');
+      const set = [...chosen];
+      if (nstpUnits.length) {                        // add the NSTP section that comes with a chosen section
+        const ns = chosen.flatMap(addOnFor).find(j => okRowFor(j, p) && !chosen.some(y => C.ov(j, y)));
+        if (ns === undefined) return;
+        set.push(ns);
+      }
+      const sig = set.sort((x, y) => x - y).join(',');
       if (seen.has(sig)) return;
       seen.add(sig);
-      const sc = scoreOf([...chosen], p);
+      const sc = scoreOf(set, p);
       if (passesShape(sc)) { sc.slots = { ...slotOf }; results.push(sc); }
       return;
     }
