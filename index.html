@@ -1260,7 +1260,7 @@ function miniWeek(blocks, h = 260) {
   let axis = '';
   for (let t = S + 2; t < E; t += 2) axis += `<span style="top:${(t - S) / (E - S) * 100}%">${((t + 11) % 12) + 1}</span>`;
   return `<div></div>${['M', 'T', 'W', 'Th', 'F', 'Sa'].map(d => `<div class="dh">${d}</div>`).join('')}
-    <div class="axis" style="--h:${h}px">${axis}</div>${cols.map(c => `<div class="col" style="--h:${h}px">${c.join('')}</div>`).join('')}`;
+    <div class="axis" style="--h:${h}px">${axis}</div>${cols.map(c => `<div class="col" style="--h:${h}px; background-size:100% ${(h * 2 / (E - S)).toFixed(2)}px">${c.join('')}</div>`).join('')}`;
 }
 function blocksFor(p, rowIdx, opts = {}) {
   const out = [];
@@ -1376,7 +1376,7 @@ function renderPick() {
       <div class="stat"><b>${days.filter(l => l.length).length}</b><span>school days</span></div>
     </div>
     ${alerts && canEditQ(a) ? `<div class="alerts">${alerts}</div>` : ''}
-    ${canEditQ(a) ? `<div class="drafts">💾 ${P.drafts.length ? 'drafts:' : ''} ${P.drafts.map((d, k) => `<span class="dchip"><button data-act="load-draft" data-d="${k}" title="load this draft">${esc(d.name)}</button><button data-act="del-draft" data-d="${k}" aria-label="delete draft">✕</button></span>`).join('')}
+    ${canEditQ(a) ? `<div class="drafts">💾 ${P.drafts.some(draftHere) ? 'drafts:' : ''} ${P.drafts.map((d, k) => !draftHere(d) ? '' : `<span class="dchip"><button data-act="load-draft" data-d="${k}" title="load this draft">${esc(d.name)}</button><button data-act="del-draft" data-d="${k}" aria-label="delete draft">✕</button></span>`).join('')}
       <button class="btn small ghost" data-act="save-draft">save as draft</button></div>` : `<p class="viewing">👀 You're viewing ${esc(N(a))}'s plan. Only ${esc(N(a))} can change it.</p>`}
     <div class="row">${connected() ? (SY().room ? `<button class="btn small" data-act="invite">👥 invite</button>` : `<button class="btn small" data-act="add-person-go">👥 compare with friends</button>`) : `<button class="btn small" data-act="share" data-i="${a}">🔗 share plan</button>`}<button class="btn small ghost" data-act="save-image" data-i="${a}">📸 save image</button></div>`;
   if (!state.rows.length) { list.innerHTML = noClasses(); return; }
@@ -1700,19 +1700,20 @@ function renderWeek() {
   $('[data-act=save-image-week]').classList.toggle('hidden', !!dsel.length);
 }
 /* ----- comparing up to 3 drafts side by side ----- */
+const draftHere = d => !d.tab || !curTab() || d.tab === curTab();   // drafts belong to the semester they were saved in
 const draftOwner = () => connected() ? myIdx() : state.active;
 function draftSel() {
   const P = people()[draftOwner()]; if (!P) return [];
-  return (state.draftCmp || []).filter(k => k === 'now' || (P.drafts[+k] !== undefined));
+  return (state.draftCmp || []).filter(k => k === 'now' || (P.drafts[+k] !== undefined && draftHere(P.drafts[+k])));
 }
 const draftLabel = (p, k) => k === 'now' ? 'current picks' : people()[p].drafts[+k].name;
 const draftSet = (p, k) => k === 'now' ? C.picks[p] : people()[p].drafts[+k].keys.map(x => C.byKey.get(x)).filter(i => i !== undefined);
 function renderDraftBar(dp, dsel) {
   const P = people()[dp], el = $('#draftBar');
-  if (!P || !P.drafts.length) { el.innerHTML = ''; return; }
+  if (!P || !P.drafts.some(draftHere)) { el.innerHTML = ''; return; }
   const opt = (k, name) => { const n = dsel.indexOf(k); return `<button class="who" data-act="dcmp" data-k="${k}" aria-pressed="${n >= 0}" style="${n >= 0 ? pv(n) : ''}; padding:5px 12px">${n >= 0 ? '✓ ' : ''}${esc(name)}</button>`; };
   el.innerHTML = `<div class="row" style="margin:0 0 10px; gap:6px; align-items:center"><span class="pref-label" style="margin:0">📑 compare ${N(dp) === 'You' ? 'your' : esc(N(dp)) + '\'s'} drafts (up to 3):</span>
-    ${opt('now', 'current picks')}${P.drafts.map((d, k) => opt(String(k), d.name)).join('')}
+    ${opt('now', 'current picks')}${P.drafts.map((d, k) => draftHere(d) ? opt(String(k), d.name) : '').join('')}
     ${dsel.length ? '<button class="btn small link" data-act="dcmp-off">✕ back to people</button>' : ''}</div>`;
 }
 function toggleDraftCmp(k) {
@@ -1932,7 +1933,7 @@ async function saveDraft(p) {
     <div class="row"><button class="btn small" data-choice="save">save draft</button><button class="btn small ghost" data-choice="">cancel</button></div>`);
   if (!res || res.choice !== 'save') return;
   const d = people()[p].drafts;
-  d.push({ name: (res.name || '').trim() || `draft ${d.length + 1}`, keys: C.picks[p].map(i => keyOf(state.rows[i])) });
+  d.push({ name: (res.name || '').trim() || `draft ${d.length + 1}`, keys: C.picks[p].map(i => keyOf(state.rows[i])), tab: curTab() || '' });
   if (d.length > 8) d.shift();
   save(); render(); toast('draft saved 💾');
 }
@@ -2379,7 +2380,7 @@ function aisisCopier() {
 })();
 
 /* ======================= Google Sheets sync: profiles & rooms ======================= */
-const SYNC_URL = 'https://script.google.com/macros/s/AKfycbw1FL9ma3mPFCzHabz89AVlWWySAPdQiQ79iiNbKD5aOpvNmrRso0bOWw5bgeOPa762/exec'; // ← paste your Apps Script web app URL (ends in /exec) between the quotes
+const SYNC_URL = 'https://script.google.com/macros/s/AKfycbw1FL9ma3mPFCzHabz89AVlWWySAPdQiQ79iiNbKD5aOpvNmrRso0bOWw5bgeOPa762/exec'; // your Apps Script web app URL (ends in /exec)
 const SY = () => state.sync;
 const syncUrl = () => SYNC_URL || SY().url || '';
 const connected = () => !!(syncUrl() && SY().me && SY().mine);
@@ -2389,8 +2390,8 @@ const canEditQ = p => !connected() || p === myIdx();
 function canEdit(p) { if (canEditQ(p)) return true; toast(`Only ${N(p)} can change ${N(p)}'s plan 🔒`); return false; }
 const fmtCode = c => { c = String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); return c.length === 8 ? c.slice(0, 4) + '-' + c.slice(4) : c.length === 10 ? c.slice(0, 5) + '-' + c.slice(5) : c; };
 const authBody = () => ({ id: SY().me.id, token: SY().me.token });
-const normMine = m => ({ name: m.name || '', emoji: m.emoji || '', reqs: m.reqs || [], picks: m.picks || [], backups: m.backups || {}, stars: m.stars || [], busy: m.busy || [], slots: m.slots || {}, locks: m.locks || [], drafts: m.drafts || [], notes: m.notes || {}, profs: m.profs || {}, ips: m.ips || null, side: m.side || 'L', ipsName: m.ipsName || '' });
-const pubOf = m => ({ name: m.name, emoji: m.emoji, reqs: m.reqs, picks: m.picks, backups: m.backups, stars: m.stars, busy: m.busy, slots: m.slots, locks: m.locks });
+const normMine = m => ({ name: m.name || '', emoji: m.emoji || '', reqs: m.reqs || [], picks: m.picks || [], tabPicks: m.tabPicks || null, backups: m.backups || {}, stars: m.stars || [], busy: m.busy || [], slots: m.slots || {}, locks: m.locks || [], drafts: m.drafts || [], notes: m.notes || {}, profs: m.profs || {}, ips: m.ips || null, side: m.side || 'L', ipsName: m.ipsName || '' });
+const pubOf = m => ({ name: m.name, emoji: m.emoji, reqs: m.reqs, picks: m.picks, tabPicks: m.tabPicks, backups: m.backups, stars: m.stars, busy: m.busy, slots: m.slots, locks: m.locks });
 const privOf = m => ({ drafts: m.drafts, notes: m.notes, profs: m.profs, ips: m.ips, side: m.side, ipsName: m.ipsName });
 const pending = () => connected() && JSON.stringify(SY().mine) !== SY().lastPushed;
 let needActive = false, materializing = false, pushTimer = null, pushing = false, pollTimer = null, lastSig = '', syncStatus = 'ok', pendingJoin = null;
@@ -2408,6 +2409,29 @@ async function api(a, body = {}) {
   } finally { clearTimeout(t); }
 }
 
+/* ----- picks per tab (semester): "THEO 13 D1" in 1st sem is not "THEO 13 D1" in 2nd sem ----- */
+const curTab = () => connected() ? SY().tab : state.sheetName;
+const picksFor = (m, tab) => m.tabPicks ? (m.tabPicks[tab] || []) : (m.picks || []);   // friends on an older version still have one flat list
+/* Older profiles kept one list for every semester. Sort it into tabs once: by the IPS term the subject belongs to,
+   then by which tab offers it; anything unclear stays with the tab that's open. */
+function migratePicks(m) {
+  const sy = SY();
+  if (!m || m.tabPicks || !sy.tab || !(sy.tabs || []).length) return false;
+  const subsOf = t => new Set(((sy.tabSubs || {})[t] || []).map(norm));
+  const blocks = (m.ips && m.ips.blocks) || [], years = uniq(blocks.map(b => b.y)), an = m.ips && m.ips.anchor;
+  const out = {};
+  (m.picks || []).forEach(k => {
+    const sub = k.split(' ').slice(0, -1).join(' ');
+    const b = blocks.find(x => x.s.some(c => norm(c) === sub));
+    let cands = (b ? sy.tabs.filter(t => termOf(t) === b.t) : sy.tabs.slice()).filter(t => subsOf(t).has(sub));
+    if (cands.length > 1 && b && an) { const want = an.sy + years.indexOf(b.y) - an.yi; const hit = cands.find(t => syOf(t) === want); if (hit) cands = [hit]; }
+    const t = cands.length === 1 ? cands[0] : cands.includes(sy.tab) ? sy.tab : cands[0] || sy.tab;
+    (out[t] = out[t] || []).push(k);
+  });
+  m.tabPicks = out;
+  return true;
+}
+
 /* the view (state.people + row ticks) is rebuilt from your profile and your room's members */
 function personOf(m) { m = m || {}; return Object.assign(newPerson(), { name: m.name || '', emoji: m.emoji || '', reqs: m.reqs || [], backups: m.backups || {}, stars: m.stars || [], busy: m.busy || [], slots: m.slots || {}, locks: m.locks || [], drafts: m.drafts || [], ips: m.ips ? clone(m.ips) : null, side: m.side || 'L', ipsName: m.ipsName || '' }); }
 function materialize() {
@@ -2416,7 +2440,7 @@ function materialize() {
   const members = rc ? rc.members : [{ id: sy.me.id }];
   const src = m => m.id === sy.me.id ? sy.mine : (m.pub || {});
   state.people = members.map(m => personOf(src(m)));
-  const sets = members.map(m => new Set(src(m).picks || []));
+  const sets = members.map(m => new Set(picksFor(src(m), sy.tab)));
   state.rows.forEach(r => { const k = keyOf(r); r.on = [0, 1, 2, 3].map(p => p < sets.length && sets[p].has(k)); });
   state.notes = sy.mine.notes || {}; state.profs = sy.mine.profs || {};
   if (state.active >= state.people.length) state.active = myIdx();
@@ -2424,9 +2448,18 @@ function materialize() {
 function extractMine() {
   const i = myIdx(), sy = SY(), p = state.people[i];
   if (!p) return;
-  const present = new Set(state.rows.map(keyOf));
-  const kept = (sy.mine.picks || []).filter(k => !present.has(k));   // picks from other semesters' tabs survive
-  sy.mine = normMine({ name: p.name, emoji: p.emoji, reqs: p.reqs, picks: uniq([...kept, ...state.rows.filter(r => r.on[i]).map(keyOf)]),
+  const here = state.rows.filter(r => r.on[i]).map(keyOf);
+  let picks, tabPicks = null;
+  migratePicks(sy.mine);
+  if (sy.mine.tabPicks && sy.tab) {             // picks belong to the tab (semester) they were made in
+    tabPicks = { ...sy.mine.tabPicks, [sy.tab]: here };
+    if (!here.length) delete tabPicks[sy.tab];
+    picks = uniq(Object.values(tabPicks).flat());
+  } else {                                       // tabs not known yet: old behaviour, keep picks that aren't in this list
+    const present = new Set(state.rows.map(keyOf));
+    picks = uniq([...(sy.mine.picks || []).filter(k => !present.has(k)), ...here]);
+  }
+  sy.mine = normMine({ name: p.name, emoji: p.emoji, reqs: p.reqs, picks, tabPicks,
                        backups: p.backups, stars: p.stars, busy: p.busy, slots: p.slots, locks: p.locks, drafts: p.drafts, notes: state.notes, profs: state.profs, ips: p.ips, side: p.side, ipsName: p.ipsName });
 }
 function mineFromLocal() {
@@ -2549,6 +2582,8 @@ async function loadOfferings(tab, quiet) {
   let out = await api('offerings', { sheet: tab || sy.tab || '' });
   if (!tab && !sy.tabPicked && out.subjects) { const best = bestTab(out); if (best !== out.sheet) out = await api('offerings', { sheet: best }); }
   sy.tabs = out.tabs; sy.tab = out.sheet; sy.offAt = Date.now();
+  if (out.subjects) sy.tabSubs = out.subjects;
+  if (sy.mine && migratePicks(sy.mine)) { persist(); lastSig = ''; schedulePush(); }
   const rows = parseScheduleSheet(out.aoa).map(r => ({ ...r, on: [false, false, false, false] }));
   const sig = JSON.stringify([out.sheet, rows.map(rowArr), out.electives || null]);   // the tab name counts too: two empty tabs are still different semesters
   if (sig !== sy.offSig) { sy.offSig = sig; sy.offVer++; state.rows = rows; state.sheetName = out.sheet; state.electives = out.electives || null; }
@@ -2681,7 +2716,7 @@ function signOutDevice(msg) {
   clearTimeout(pollTimer); clearTimeout(pushTimer);
   if (mine) {   // keep a local copy of your plan so the site still works offline
     state.people = [personOf(mine)]; state.notes = mine.notes; state.profs = mine.profs;
-    const set = new Set(mine.picks);
+    const set = new Set(picksFor(mine, sy.tab));
     state.rows.forEach(r => r.on = [set.has(keyOf(r)), false, false, false]);
   }
   state.sync = Object.assign(freshSync(), { url: sy.url });
@@ -2852,9 +2887,14 @@ function ago(t) {
 /* what changed in your picks since the last save, so friends see it in the room's activity */
 function eventsFor(prevJs, mine) {
   if (!SY().rooms.length) return [];
-  let prev; try { prev = JSON.parse(prevJs).picks || []; } catch (e) { return []; }
-  const before = new Set(prev), after = new Set(mine.picks || []);
-  const add = [...after].filter(k => !before.has(k)).map(keyParts), del = [...before].filter(k => !after.has(k)).map(keyParts);
+  let prev; try { prev = JSON.parse(prevJs); } catch (e) { return []; }
+  if (!prev.tabPicks || !mine.tabPicks) return [];      // the first save after moving to per-tab picks isn't news
+  const add = [], del = [];
+  uniq([...Object.keys(prev.tabPicks), ...Object.keys(mine.tabPicks)]).forEach(t => {
+    const before = new Set(prev.tabPicks[t] || []), after = new Set(mine.tabPicks[t] || []);
+    after.forEach(k => { if (!before.has(k)) add.push(keyParts(k)); });
+    before.forEach(k => { if (!after.has(k)) del.push(keyParts(k)); });
+  });
   const ev = [];
   add.forEach(a => {
     const d = del.findIndex(x => norm(x.s) === norm(a.s));
