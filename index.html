@@ -260,6 +260,7 @@
   .flag.bad { background: var(--bad-soft); color: var(--bad); }
   .flag.plan { background: var(--note); color: var(--ink); font-family: var(--hand); font-size: 18px; padding: 0 9px; margin: 0; transform: rotate(-3deg); }
   .cardfoot { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+  #modal [hidden] { display: none !important; }
   .profbtn { border: none; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
   .profbtn:hover { color: var(--accent); }
   .fitchip { font-size: 12px; font-weight: 700; border-radius: 999px; padding: 1px 8px; margin-left: 6px; white-space: nowrap; background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
@@ -772,8 +773,21 @@ function closeModal(val) {
   $('#modal').classList.add('hidden');
   if (modalResolve) { const r = modalResolve; modalResolve = null; r(val === null ? null : { choice: val, ...fields }); }
 }
+/* the "choose a subject" list: search box, code buttons, and "show the ones that clash" */
+function filterSubList() {
+  const q = norm(($('#modal [data-sfilter]') || {}).value || ''), pf = ($('#modal [data-pfx][aria-pressed="true"]') || { dataset: { pfx: 'all' } }).dataset.pfx;
+  const showClash = !$('#modal [data-showclash]') || $('#modal [data-showclash]').dataset.on === '1';
+  let n = 0;
+  $$('#modal .sublist .choice').forEach(b => { const ok = (!q || b.dataset.k.includes(q)) && (pf === 'all' || b.dataset.p === pf) && (showClash || b.dataset.fit === '1'); b.hidden = !ok; if (ok) n++; });
+  const nm = $('#modal [data-nomatch]'); if (nm) nm.hidden = n > 0;
+}
+document.addEventListener('input', e => { if (e.target.matches && e.target.matches('#modal [data-sfilter]')) filterSubList(); });
 $('#modal').addEventListener('click', e => {
   if (e.target.id === 'modal') return closeModal(null);
+  const pf = e.target.closest('[data-pfx]');
+  if (pf) { $$('#modal [data-pfx]').forEach(b => b.setAttribute('aria-pressed', b === pf)); return filterSubList(); }
+  const sc = e.target.closest('[data-showclash]');
+  if (sc) { sc.dataset.on = '1'; sc.hidden = true; return filterSubList(); }
   const set = e.target.closest('[data-mset]');
   if (set) { // single-choice toggle group inside a modal
     const g = set.dataset.mset;
@@ -998,7 +1012,7 @@ const DEFAULT_ELECTIVES = [
   ['Elective', 'Counts', 'Except', 'Notes'],
   ['IE 1, Interdisciplinary Elective - English, Interdisiplinary Elective - English', 'ENE 13.03i, ENE 13.04i, ENE 13.05i, ENE 13.06i', '', 'only these four'],
   ['IE 2, IE 3, IE, Interdisciplinary Elective, Interdisiplinary Elective', 'ends in i', 'ENE 13.03i, ENE 13.04i, ENE 13.05i, ENE 13.06i', 'any subject whose code ends in i, except the IE 1 ones'],
-  ['Management Elective, MGT Elective', 'MKTG, LLAW, FAA, LAS, ITMGT, OPMAN, FINN, ACCT, DECSC, QUANT', '', 'any subject with these codes'],
+  ['Management Elective, MGT Elective', 'MKTG, LLAW, FAA, LAS, ITMGT, OPMAN, FINN, ACCT, DECSC, QUANT', 'FAA 101, FAA 102, FAA 111, MKTG 111', 'any subject with these codes, except the core FAA 101, 102, 111 and MKTG 111 (and their variants)'],
   ['CTM Elective, Comtech Elective', 'Management Elective, ECON, CSCI, COMM', '', 'any management elective, or any ECON, CSCI or COMM subject'],
   ['ECON Elective, Economics Elective', 'ECON', '', 'assumed: any ECON subject'],
   ['FAA Elective, Finance and Accounting Elective', 'FAA', '', 'assumed: any FAA subject'],
@@ -1031,7 +1045,7 @@ function parseElectives(aoa) {
 function ruleAllows(rule, s, depth = 0) {   // s = normalized subject code, e.g. "mktg 126.03i"
   if (!rule || depth > 4) return false;
   const prefix = s.split(' ')[0];
-  const hit = t => t.any || (t.endsI && /\d[\w.]*i$/.test(s)) || (t.code && t.code === s) || (t.prefix && t.prefix === prefix) || (t.ref && ruleAllows(t.ref, s, depth + 1));
+  const hit = t => t.any || (t.endsI && /\d[\w.]*i$/.test(s)) || (t.code && (t.code === s || s.startsWith(t.code + '.'))) || (t.prefix && t.prefix === prefix) || (t.ref && ruleAllows(t.ref, s, depth + 1));
   return rule.allow.some(hit) && !rule.except.some(hit);
 }
 const slotLabel = req => req.includes(' · ') ? req.slice(req.indexOf(' · ') + 3) : req;
@@ -1084,9 +1098,16 @@ async function chooseSlot(req) {
     const idx = state.rows.map((r, i) => i).filter(i => norm(state.rows[i].subject) === norm(sub));
     return { sub, n: idx.length, fit: idx.filter(i => !clashPreview(i, a).length).length };
   }).sort((u, v) => (v.fit > 0) - (u.fit > 0) || u.sub.localeCompare(v.sub));
+  const mark = o => norm(o.sub) === norm(x.pref) || (x.subject && norm(o.sub) === norm(x.subject));
+  const pfx = uniq(info.map(o => o.sub.split(' ')[0].toUpperCase())).sort();
+  const clashing = info.filter(o => !o.fit && !mark(o)).length;
   const res = await openModal(`<h3>Choose your ${esc(slotLabel(req))}</h3><p>${x.rule.note ? esc(x.rule.note) + '. ' : ''}Subjects already counted elsewhere in your IPS aren't listed, so nothing gets doubled.</p>
-    <div class="choice-list">${info.length ? info.map(o => `<button class="choice" data-choice="${esc(o.sub)}"><span style="flex:1"><b>${esc(o.sub)}</b>${norm(o.sub) === norm(x.pref) ? ' · from your IPS' : ''}${x.subject && norm(o.sub) === norm(x.subject) ? ' · current' : ''}</span><span class="m" style="font-weight:600; color:var(--muted)">${o.n} section${o.n === 1 ? '' : 's'} · ${o.fit ? o.fit + ' fit' : 'all clash'}</span></button>`).join('')
-      : '<p class="hint">No offered subjects match this elective in the open tab yet.</p>'}</div>
+    ${info.length > 8 ? `<input type="text" data-sfilter placeholder="🔎 search, e.g. MKTG 126 or 13.0" style="margin-top:8px; border-radius:999px">
+      ${pfx.length > 1 ? `<div class="toggles" style="margin-top:8px">${['all', ...pfx].map(p => `<button class="tgl" data-pfx="${esc(p)}" aria-pressed="${p === 'all'}">${esc(p)}</button>`).join('')}</div>` : ''}` : ''}
+    <div class="choice-list sublist" style="max-height:48vh; overflow:auto; margin-top:8px">${info.length ? info.map(o => `<button class="choice" data-choice="${esc(o.sub)}" data-k="${esc(norm(o.sub))}" data-p="${esc(o.sub.split(' ')[0].toUpperCase())}" data-fit="${o.fit || mark(o) ? 1 : 0}" ${!o.fit && !mark(o) && clashing < info.length ? 'hidden' : ''}><span style="flex:1"><b>${esc(o.sub)}</b>${norm(o.sub) === norm(x.pref) ? ' · from your IPS' : ''}${x.subject && norm(o.sub) === norm(x.subject) ? ' · current' : ''}</span><span class="m" style="font-weight:600; color:var(--muted)">${o.n} section${o.n === 1 ? '' : 's'} · ${o.fit ? o.fit + ' fit' : 'all clash'}</span></button>`).join('')
+      : '<p class="hint">No offered subjects match this elective in the open tab yet.</p>'}
+      ${clashing && clashing < info.length ? `<button class="btn small link" data-showclash style="justify-self:start">+ ${clashing} where every section clashes · show them</button>` : ''}
+      <p class="hint" data-nomatch hidden style="margin:0">No matches.</p></div>
     <div class="row">${x.manual ? '<button class="btn small ghost" data-choice="__auto">let the site choose</button>' : ''}<button class="btn small ghost" data-choice="">cancel</button></div>`);
   if (!res || !res.choice) return;
   const snap = snapshot();
@@ -2297,14 +2318,18 @@ function aisisCopier() {
     var C = { s: at('subject'), x: at('section'), t: at('time'), r: at('room'), i: at('instructor'), l: at('lang'), v: at('level'), k: at('remark') };
     trs.forEach(function (tr) {
       var c = tr.cells, g = function (k) { return k >= 0 ? txt(c[k]) : ''; };
-      var subj = g(C.s); if (!subj || /^subject/i.test(subj)) return;
-      var lv = g(C.v).toUpperCase(); if (lv && lv !== 'U') { stat.grad++; return; }
+      var subj = g(C.s), comp = ''; if (!subj || /^subject/i.test(subj)) return;
+      stat.raw = (stat.raw || 0) + 1;
+      var cm = subj.match(/^(.*?\d[\w.]*)\s*\(([^)]+)\)\s*$/); if (cm) { subj = cm[1].trim(); comp = cm[2].trim().toUpperCase(); }
+      var lv = g(C.v).toUpperCase(); if (/^(G|GS|M|MA|MS|D|DR|PHD)$/.test(lv)) { stat.grad++; return; }
       var T = g(C.t).toUpperCase(), w = when(T), room = g(C.r);
       if (/ONLINE/.test(T) && (!room || /^TBA$/i.test(room))) room = 'ONLINE';
       var inst = g(C.i).replace(/,\s*-\s*$/, '').trim(); if (/^TBA\b/i.test(inst)) inst = 'TBA';
       var lang = g(C.l).toUpperCase(); if (lang !== 'ENG' && lang !== 'FIL') lang = '';
-      var key = (subj + ' ' + g(C.x)).toUpperCase(); if (stat.seen[key]) return; stat.seen[key] = 1;
-      out.push({ s: subj, x: g(C.x), d: w.days, t: w.time, r: room, i: inst, l: lang, k: g(C.k).toUpperCase(), p: '' });
+      var sec = g(C.x), key = (subj + ' ' + sec).toUpperCase();
+      if (stat.seen[key] && comp && stat.seen[key] !== comp) { sec = sec + ' ' + comp; key = (subj + ' ' + sec).toUpperCase(); }
+      if (stat.seen[key]) return; stat.seen[key] = comp || 1;
+      out.push({ s: subj, x: sec, d: w.days, t: w.time, r: room, i: inst, l: lang, k: g(C.k).toUpperCase(), p: '' });
     });
   };
   var pairUp = function (list) {
@@ -2355,7 +2380,7 @@ function aisisCopier() {
   };
   if (form) document.getElementById('ehx2').onclick = async function () {
     var period = form.applicablePeriod.value, depts = Array.prototype.map.call(form.deptCode.options, function (o) { return o.value; }).filter(function (v, i, a) { return v !== '**IE**' && a.indexOf(v) === i; });
-    var out = [], stat = { grad: 0, seen: {} }, failed = [];
+    var out = [], stat = { grad: 0, seen: {} }, failed = [], empty = [];
     this.disabled = true;
     for (var n = 0; n < depts.length; n++) {
       $m('Reading department ' + (n + 1) + ' of ' + depts.length + ' (' + depts[n] + ')\u2026 ' + out.length + ' sections so far');
@@ -2364,12 +2389,14 @@ function aisisCopier() {
           body: new URLSearchParams({ command: 'displayResults', applicablePeriod: period, deptCode: depts[n], subjCode: 'ALL' }).toString() });
         var html = new TextDecoder('windows-1252').decode(await res.arrayBuffer());
         var doc = new DOMParser().parseFromString(html, 'text/html'), tbl = doc.getElementById('example');
+        var before = stat.raw || 0;
         if (tbl && tbl.tBodies[0]) read(tbl, Array.prototype.slice.call(tbl.tBodies[0].rows), out, stat);
+        if ((stat.raw || 0) === before) empty.push(depts[n]);
       } catch (e) { failed.push(depts[n]); }
       await new Promise(function (r) { setTimeout(r, 900); });
     }
     out.sort(function (a, b) { return a.s < b.s ? -1 : a.s > b.s ? 1 : a.x < b.x ? -1 : a.x > b.x ? 1 : 0; });
-    ready = tsv(out); offer(out.length, stat, failed.length ? '. Couldn\'t read: ' + failed.join(', ') : '');
+    ready = tsv(out); offer(out.length, stat, (failed.length ? '. Couldn\'t read: ' + failed.join(', ') : '') + (empty.length ? '. No classes in: ' + empty.join(', ') : ''));
   };
 }
 (function () {
