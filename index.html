@@ -522,6 +522,7 @@
             </div>
             <datalist id="dlSubjects"></datalist>
             <datalist id="dlPairs"></datalist>
+            <datalist id="dlProgs"></datalist>
           </div>
           </div>
 
@@ -566,7 +567,7 @@
               <button data-f="picked" aria-pressed="false">picked</button>
               <button data-f="starred" aria-pressed="false">★</button>
             </div>
-            <div class="seg" role="group"><button id="fitsBtn" aria-pressed="false" title="hide sections that clash with what's already picked or with busy times">✓ only what fits</button></div>
+            <div class="seg" role="group"><button id="fitsBtn" aria-pressed="false" title="hide sections that clash with what's already picked or with busy times">✓ only what fits</button><button id="forBtn" aria-pressed="false" title="hide sections whose slots are all reserved for other programs or years">🎓 only mine</button></div>
             <input type="text" id="search" placeholder="🔎 subject, prof, or a time like tue 2pm">
           </div>
           <div id="pickList"></div>
@@ -697,7 +698,7 @@ function crest(i, cls = '') {
 
 /* ======================= state ======================= */
 const STORE = 'enlistmentHub.v4';
-const newPerson = () => ({ name: '', emoji: '', reqs: [], ipsAoa: null, ipsName: '', ips: null, side: 'L', backups: {}, stars: [], busy: [], drafts: [], slots: {}, locks: [] });
+const newPerson = () => ({ name: '', emoji: '', reqs: [], ipsAoa: null, ipsName: '', ips: null, side: 'L', backups: {}, stars: [], busy: [], drafts: [], slots: {}, locks: [], prog: '', yr: '' });
 const BUILD_DEFAULTS = { noSat: false, earliest: 7, latest: 0, keep: false, sort: 'days', maxHours: 0, maxRow: 0, freeDay: false, skipAvoid: true, mode: 'solo', together: [0, 1, 2, 3] };
 const freshSync = () => ({ url: '', me: null, mine: null, rooms: [], room: '', roomCache: {}, tab: '', tabs: [], tabPicked: false, offAt: 0, offSig: '', offVer: 0, updated: 0, lastPushed: '', seen: {}, asked: {}, hasRec: true });
 function freshState() {
@@ -845,7 +846,7 @@ function parseScheduleSheet(aoa) {
     if (si < 0) continue;
     const find = (...names) => row.findIndex(c => names.includes(c));
     col = { subject: si, section: find('section'), days: find('day', 'days'), time: find('time'), room: find('room'),
-            instructor: find('instructor', 'professor', 'faculty'), pair: find('pair subject', 'pair') };
+            instructor: find('instructor', 'professor', 'faculty'), pair: find('pair subject', 'pair'), forWho: find('for', 'open to', 'reserved for'), note: find('remarks', 'remark') };
     selCols = row.map((c, k) => (c === 'select' && k < si) ? k : -1).filter(k => k >= 0);
     if (!selCols.length && si > 0 && si <= 4) selCols = [...Array(si).keys()];
   }
@@ -855,6 +856,7 @@ function parseScheduleSheet(aoa) {
     col = { subject: n, section: n + 1, days: n + 2, time: n + 3, room: n + 4, instructor: n + 5, pair: n + 7 };
     selCols = [...Array(n).keys()];
     if (aoa.every(row => row.length <= n + 7) || aoa.every(row => /^(eng|fil)?$/i.test(String(row[n + 7] ?? '').trim()))) col.pair = n + 6;
+    col.forWho = col.pair === n + 6 ? n + 8 : -1; col.note = col.pair === n + 6 ? n + 9 : -1;   // rows copied by the AISIS bookmark
   }
   selCols = selCols.slice(0, CONFIG.MAX_PEOPLE);
   const get = (row, i) => (i >= 0 && i < row.length) ? String(row[i] ?? '').trim() : '';
@@ -864,6 +866,7 @@ function parseScheduleSheet(aoa) {
     if (!subject || norm(subject) === 'subject') return;
     const r = { subject, section: get(row, col.section), days: get(row, col.days), time: get(row, col.time),
                 room: get(row, col.room), instructor: get(row, col.instructor), pair: get(row, col.pair),
+                forWho: get(row, col.forWho), note: /^⚠/.test(get(row, col.note)) ? '' : get(row, col.note),
                 on: [0, 1, 2, 3].map(p => p < selCols.length && isTrue(row[selCols[p]])) };
     if (!r.section && !r.days && !r.time) return;
     if (r.pair.startsWith('⚠')) r.pair = '';
@@ -1096,7 +1099,7 @@ async function chooseSlot(req) {
   if (!x) return;
   const info = eligibleFor(a, x).map(sub => {
     const idx = state.rows.map((r, i) => i).filter(i => norm(state.rows[i].subject) === norm(sub));
-    return { sub, n: idx.length, fit: idx.filter(i => !clashPreview(i, a).length).length };
+    return { sub, n: idx.length, fit: idx.filter(i => !clashPreview(i, a).length && !blockedFor(i, a)).length };
   }).sort((u, v) => (v.fit > 0) - (u.fit > 0) || u.sub.localeCompare(v.sub));
   const mark = o => norm(o.sub) === norm(x.pref) || (x.subject && norm(o.sub) === norm(x.subject));
   const pfx = uniq(info.map(o => o.sub.split(' ')[0].toUpperCase())).sort();
@@ -1104,9 +1107,9 @@ async function chooseSlot(req) {
   const res = await openModal(`<h3>Choose your ${esc(slotLabel(req))}</h3><p>${x.rule.note ? esc(x.rule.note) + '. ' : ''}Subjects already counted elsewhere in your IPS aren't listed, so nothing gets doubled.</p>
     ${info.length > 8 ? `<input type="text" data-sfilter placeholder="🔎 search, e.g. MKTG 126 or 13.0" style="margin-top:8px; border-radius:999px">
       ${pfx.length > 1 ? `<div class="toggles" style="margin-top:8px">${['all', ...pfx].map(p => `<button class="tgl" data-pfx="${esc(p)}" aria-pressed="${p === 'all'}">${esc(p)}</button>`).join('')}</div>` : ''}` : ''}
-    <div class="choice-list sublist" style="max-height:48vh; overflow:auto; margin-top:8px">${info.length ? info.map(o => `<button class="choice" data-choice="${esc(o.sub)}" data-k="${esc(norm(o.sub))}" data-p="${esc(o.sub.split(' ')[0].toUpperCase())}" data-fit="${o.fit || mark(o) ? 1 : 0}" ${!o.fit && !mark(o) && clashing < info.length ? 'hidden' : ''}><span style="flex:1"><b>${esc(o.sub)}</b>${norm(o.sub) === norm(x.pref) ? ' · from your IPS' : ''}${x.subject && norm(o.sub) === norm(x.subject) ? ' · current' : ''}</span><span class="m" style="font-weight:600; color:var(--muted)">${o.n} section${o.n === 1 ? '' : 's'} · ${o.fit ? o.fit + ' fit' : 'all clash'}</span></button>`).join('')
+    <div class="choice-list sublist" style="max-height:48vh; overflow:auto; margin-top:8px">${info.length ? info.map(o => `<button class="choice" data-choice="${esc(o.sub)}" data-k="${esc(norm(o.sub))}" data-p="${esc(o.sub.split(' ')[0].toUpperCase())}" data-fit="${o.fit || mark(o) ? 1 : 0}" ${!o.fit && !mark(o) && clashing < info.length ? 'hidden' : ''}><span style="flex:1"><b>${esc(o.sub)}</b>${norm(o.sub) === norm(x.pref) ? ' · from your IPS' : ''}${x.subject && norm(o.sub) === norm(x.subject) ? ' · current' : ''}</span><span class="m" style="font-weight:600; color:var(--muted)">${o.n} section${o.n === 1 ? '' : 's'} · ${o.fit ? o.fit + ' fit' : 'none fit'}</span></button>`).join('')
       : '<p class="hint">No offered subjects match this elective in the open tab yet.</p>'}
-      ${clashing && clashing < info.length ? `<button class="btn small link" data-showclash style="justify-self:start">+ ${clashing} where every section clashes · show them</button>` : ''}
+      ${clashing && clashing < info.length ? `<button class="btn small link" data-showclash style="justify-self:start">+ ${clashing} where no section fits · show them</button>` : ''}
       <p class="hint" data-nomatch hidden style="margin:0">No matches.</p></div>
     <div class="row">${x.manual ? '<button class="btn small ghost" data-choice="__auto">let the site choose</button>' : ''}<button class="btn small ghost" data-choice="">cancel</button></div>`);
   if (!res || !res.choice) return;
@@ -1339,6 +1342,9 @@ function renderPeople() {
       <label class="field">IPS subjects this semester · one per line</label>
       <textarea class="ruled preqs" data-i="${i}" placeholder="MATH 21&#10;ENG 12&#10;IE 2&#10;Management Elective&#10;…">${esc(p.reqs.join('\n'))}</textarea>
       ${p.ipsAoa || p.ips ? `<div class="ipsline">📜 from ${esc(p.ipsName || 'your IPS')}${p.ips && p.ips.pick ? ` · <b>${esc(p.ips.pick)}</b> (matches the open tab)` : ''}${p.ips && p.ips.edits && p.ips.edits[p.ips.pick] ? ` · edited by hand <button class="btn link" data-act="ips-reset" data-i="${i}">↺ use the IPS list</button>` : ''}${p.ipsAoa || uniq(((p.ips && p.ips.blocks) || []).map(b => b.c)).length > 1 ? ` · <select data-side="${i}"><option value="L" ${p.side === 'L' ? 'selected' : ''}>left program</option><option value="R" ${p.side === 'R' ? 'selected' : ''}>right program</option></select>` : ''}</div>` : ''}
+      <label class="field">🎓 Program & year · for classes reserved for certain majors</label>
+      <div class="row" style="margin:0; gap:8px"><input type="text" class="pprog" data-i="${i}" list="dlProgs" maxlength="20" placeholder="e.g. AB MEC" value="${esc(p.prog || '')}" style="flex:1; min-width:120px; text-transform:uppercase">
+        <select data-yr="${i}" style="width:auto">${['', '1', '2', '3', '4', '5'].map(y => `<option value="${y}" ${String(p.yr || '') === y ? 'selected' : ''}>${y ? ordinal(+y) + ' year' : `year: ${ipsYear(p) ? 'from your IPS (' + ordinal(ipsYear(p)) + ')' : 'from your IPS'}`}</option>`).join('')}</select></div>
       <label class="field">Busy times · org meetings, work, commute</label>
       <div class="chiplist">${p.busy.map((b, k) => `<span class="bchip">${esc(b.label)} · ${esc(busyText(b))}<button data-act="del-busy" data-i="${i}" data-b="${k}" aria-label="remove">✕</button></span>`).join('')}
         <button class="btn small ghost" data-act="add-busy" data-i="${i}">+ busy time</button></div>
@@ -1367,6 +1373,7 @@ function syncSetup() {
   $('#urlRefresh').innerHTML = state.sheetUrl && !connected() ? `<div class="row"><button class="btn small soft" data-act="refresh-url">↻ refresh from your Google Sheet</button><span class="note-hand" style="font-size:18px">keeps everyone's picks</span></div>` : '';
   $('#dlSubjects').innerHTML = uniq(state.rows.map(r => r.subject)).map(s => `<option value="${esc(s)}">`).join('');
   $('#dlPairs').innerHTML = state.rows.map(r => `<option value="${esc(rowLabel(r))}">`).join('');
+  $('#dlProgs').innerHTML = uniq(state.rows.flatMap(r => forList(r).map(e => e.prog.toUpperCase()))).filter(x => x !== 'ANY').sort().map(x => `<option value="${esc(x)}">`).join('');
   syncDayChips();
 }
 function renderHeroMini() {
@@ -1406,6 +1413,7 @@ function renderPick() {
   if (f === 'need' && !reqs.length) f = 'all';
   $$('#pickFilter button').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === f));
   $('#fitsBtn').setAttribute('aria-pressed', !!state.fitsOnly);
+  $('#forBtn').setAttribute('aria-pressed', forMeOn(a));
   $('#pickFilter [data-f=need]').textContent = N(a) === 'You' ? 'my subjects' : `${N(a)}'s subjects`;
   const q = norm($('#search').value), tq = timeQuery(q);
   const groups = new Map();
@@ -1435,7 +1443,9 @@ function renderPick() {
     if (f === 'starred') idx = idx.filter(i => isStar(i, a));
     let hidden = 0;
     if (state.fitsOnly) { const keep = idx.filter(i => state.rows[i].on[a] || !clashPreview(i, a).length); hidden = idx.length - keep.length; idx = keep; }
-    if (q && !idx.length && !hidden) return;
+    let notMine = 0;
+    if (forMeOn(a)) { const keep = idx.filter(i => !blockedFor(i, a)); notMine = idx.length - keep.length; idx = keep; }
+    if (q && !idx.length && !hidden && !notMine) return;
     const needers = people().map((_, i) => planHas(i, k) ? i : -1).filter(i => i >= 0);
     const st = item ? item : statusOf(a, subj);
     const pill = st.st === 'ready' ? `<span class="pillst st-ready">✓ section ${esc(st.rows.map(j => state.rows[j].section).join(', '))}</span>`
@@ -1445,11 +1455,44 @@ function renderPick() {
     html += `<div class="subj rv" style="--d:${Math.min(n++ * .04, .4)}s"><div class="subj-head"><h4>${esc(subj)}</h4><span class="row" style="margin:0; gap:8px">${tag}${nP() > 1 && needers.length ? `<span class="needers">needed by ${needers.map(i => crest(i, 'sm')).join('')}</span>` : ''}${pill}</span></div><div class="secs">`;
     if (!g) html += `<div class="sec-card" style="cursor:default"><span class="flag warn">not in the class offerings yet</span></div>`;
     idx.forEach(i => { html += secCard(i, a, bks); });
+    if (notMine) html += `<div class="sec-card" style="cursor:default; border-style:dashed; box-shadow:none"><span class="meta">${idx.length || hidden ? `+ ${notMine} reserved for other programs` : `all ${notMine} section${notMine > 1 ? 's are' : ' is'} reserved for other programs or years`}</span><button class="bk" data-act="for-off" style="justify-self:start">show them</button></div>`;
     if (hidden) html += `<div class="sec-card" style="cursor:default; border-style:dashed; box-shadow:none"><span class="meta">${idx.length ? `+ ${hidden} more that clash` : `all ${hidden} section${hidden > 1 ? 's' : ''} clash with ${N(a) === 'You' ? 'your' : esc(N(a)) + '\'s'} other picks`}</span><button class="bk" data-act="fits-off" style="justify-self:start">show them</button></div>`;
     html += '</div></div>';
   });
   list.innerHTML = html || emptyBox(f === 'starred' ? '☆' : '🔍', f === 'picked' ? 'Nothing picked yet' : f === 'starred' ? 'No favorites yet' : 'No matches', f === 'picked' ? 'Tap sections in "all" to add them.' : f === 'starred' ? 'Tap "☆ star" on sections you like. Auto-build ranks them higher.' : 'Try a different search.');
 }
+/* ----- who a section is for: the "For" column ("AB MEC 3; BS ME 2; some BS LEARN") vs each person's program & year ----- */
+const ordinal = n => n + (['th', 'st', 'nd', 'rd'][n % 100 > 10 && n % 100 < 14 ? 0 : n % 10] || 'th');
+const YEARW = { first: 1, second: 2, third: 3, fourth: 4, fifth: 5 };
+const ipsYear = P => { const m = norm((P.ips && P.ips.pick) || '').match(/^(\w+) year/); return (m && YEARW[m[1]]) || 0; };
+const yearOf = p => { const P = people()[p]; return +(P.yr || 0) || ipsYear(P); };
+const FOR_CACHE = new Map();
+function forList(r) {
+  const raw = (r && r.forWho) || ''; if (!raw) return [];
+  if (!FOR_CACHE.has(raw)) FOR_CACHE.set(raw, raw.split(/;\s*/).map(t => t.trim()).filter(Boolean).map(t => {
+    const m = t.match(/^(some\s+)?(.+?)(?:\s+([\d,]+))?$/i);
+    return { all: !m[1], prog: norm(m[2]), years: m[3] ? m[3].split(',').map(Number).filter(Boolean) : [] };
+  }));
+  return FOR_CACHE.get(raw);
+}
+const progMatch = (want, prog) => !!want && (prog === want || prog.endsWith(' ' + want) || prog.replace(/\s+/g, '') === want.replace(/\s+/g, ''));
+/* 'open' (anyone), 'mine' (reserved, and you fit), 'other' (all slots reserved for other programs/years), 'unknown' (reserved, but no program set) */
+function enlistOf(i, p) {
+  const all = forList(state.rows[i]).filter(e => e.all);
+  if (!all.length) return 'open';
+  const want = norm((people()[p] || {}).prog || ''), y = yearOf(p);
+  let unknown = false;
+  for (const e of all) {   // "ANY 1" = 1st years of any program (from "FRESHMEN ONLY")
+    const progOk = e.prog === 'any' ? true : want ? progMatch(want, e.prog) : null;
+    const yearOk = !e.years.length || (y ? e.years.includes(y) : null);
+    if (progOk && yearOk) return 'mine';
+    if ((progOk === null && yearOk !== false) || (yearOk === null && progOk !== false)) unknown = true;
+  }
+  return unknown ? 'unknown' : 'other';
+}
+const forMeOn = p => state.forMe !== false && !!(people()[p] && (people()[p].prog || yearOf(p)));
+const blockedFor = (i, p) => forMeOn(p) && !state.rows[i].on[p] && enlistOf(i, p) === 'other';
+
 /* "tue 2pm", "sat", "mon thu 9:30", "1400" → which days and what time to look for */
 function timeQuery(q) {
   const D = { mon: 0, monday: 0, tue: 1, tues: 1, tuesday: 1, wed: 2, wednesday: 2, thu: 3, thur: 3, thurs: 3, thursday: 3, th: 3, fri: 4, friday: 4, sat: 5, saturday: 5 };
@@ -1469,6 +1512,15 @@ function timeQuery(q) {
   }
   return days.length || out.min !== null ? out : null;
 }
+function forChip(i, a) {
+  const r = state.rows[i]; if (!r.forWho) return '';
+  const en = enlistOf(i, a), all = forList(r).filter(e => e.all), some = forList(r).filter(e => !e.all);
+  const list = l => l.map(e => e.prog === 'any' ? e.years.map(ordinal).join('/') + ' years' : e.prog.toUpperCase() + (e.years.length ? ' ' + e.years.map(ordinal).join('/') : '')).join(', ');
+  if (en === 'mine') return `<span class="flag plan" title="${esc(r.forWho)}">🎓 for your program</span>`;
+  if (en === 'other') return `<span class="flag warn" title="${esc(r.forWho)}">🎓 reserved for ${esc(trunc(list(all), 70))}</span>`;
+  if (en === 'unknown') return `<span class="flag" title="${esc(r.forWho)}" style="background:var(--surface-2); color:var(--muted)">🎓 for ${esc(trunc(list(all), 70))} · set your ${people()[a].prog ? 'year' : 'program'} in Setup</span>`;
+  return some.length ? `<span class="meta" title="${esc(r.forWho)}">🎓 some slots for ${esc(trunc(list(some), 70))}</span>` : '';
+}
 const meetsAt = (i, tq) => C.parsed[i].some(ps => (!tq.days.length || ps.days.some(d => tq.days.includes(d))) && (tq.min === null || (ps.s <= tq.min && ps.e > tq.min)));
 function secCard(i, a, bks) {
   const r = state.rows[i], picked = !!r.on[a];
@@ -1486,6 +1538,7 @@ function secCard(i, a, bks) {
     <span class="meta">${[r.room ? esc(r.room) : '', r.instructor ? `<button class="profbtn" data-act="prof" data-i="${i}" title="see all of ${esc(r.instructor)}'s sections">${esc(r.instructor)}${pp === 'prefer' ? ' 👍' : pp === 'avoid' ? ' 👎' : ''}</button>` : ''].filter(Boolean).join(' · ')}${r.pair ? ` · 🔗 ${esc(r.pair)}` : ''}</span>
     ${others.length ? `<span class="withs">with ${others.map(p => crest(p, 'sm')).join('')}</span>` : ''}
     ${sNote ? `<span class="cardnote">📝 ${esc(trunc(sNote, 70))}</span>` : ''}${pNote ? `<span class="cardnote">🧑‍🏫 ${esc(trunc(pNote, 70))}</span>` : ''}
+    ${forChip(i, a)}${r.note ? `<span class="meta" title="${esc(r.note)}">ℹ ${esc(trunc(r.note, 90))}</span>` : ''}
     ${rNotes.map(n => `<span class="cardnote room">💬 ${esc(n.who)}: ${esc(n.text)}</span>`).join('')}
     ${rx && rx.list.length ? `<span class="reacts">${rx.list.map(x => `<span title="${esc(x.who.join(', '))}">${x.e} ${esc(x.who.join(', '))}</span>`).join('')}</span>` : ''}
     ${flag}
@@ -1500,7 +1553,8 @@ function okRowFor(i, p) {
   return C.parsed[i].length > 0
     && C.parsed[i].every(x => (!b.noSat || !x.days.includes(5)) && x.s >= b.earliest * 60 && (!b.latest || x.e <= b.latest * 60))
     && !people()[p].busy.some(bz => C.bov(i, bz))
-    && !(b.skipAvoid && profPref(state.rows[i]) === 'avoid');
+    && !(b.skipAvoid && profPref(state.rows[i]) === 'avoid')
+    && !blockedFor(i, p);
 }
 function combosFor(p, cap = CONFIG.BUILD_CAP) {
   const b = state.build, rows = state.rows, plan = C.plans[p], P = people()[p];
@@ -1846,7 +1900,7 @@ function renderCompare() {
 function fitCount(p, x) {
   const subs = x.subject ? [x.subject] : x.rule ? eligibleFor(p, x) : [];
   const ks = new Set(subs.map(norm));
-  return state.rows.map((r, k) => k).filter(k => ks.has(norm(state.rows[k].subject)) && (state.rows[k].on[p] || !clashPreview(k, p).length)).length;
+  return state.rows.map((r, k) => k).filter(k => ks.has(norm(state.rows[k].subject)) && (state.rows[k].on[p] || (!clashPreview(k, p).length && !blockedFor(k, p)))).length;
 }
 function renderCheck() {
   const el = $('#checkBody'), hard = state.checkSort === 'hard';
@@ -1962,7 +2016,7 @@ async function saveDraft(p) {
 /* ======================= share links + QR ======================= */
 const b64enc = str => btoa(unescape(encodeURIComponent(str))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 function b64dec(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return decodeURIComponent(escape(atob(s))); }
-const rowArr = r => [r.subject, r.section, r.days, r.time, r.room, r.instructor, r.pair];
+const rowArr = r => [r.subject, r.section, r.days, r.time, r.room, r.instructor, r.pair, r.forWho || '', r.note || ''];
 function shareCode(i) {
   const p = people()[i], bk = {};
   Object.entries(p.backups).forEach(([s, list]) => { if (list.length) bk[s] = list; });
@@ -2227,6 +2281,7 @@ async function pasteIps(i) {
 $('#peopleList').addEventListener('input', e => {
   const i = +e.target.dataset.i;
   if (e.target.matches('.pname')) { state.people[i].name = e.target.value.trim(); if (!state.people[i].emoji) e.target.parentElement.querySelector('.crest').textContent = N(i)[0].toUpperCase(); save(); }
+  else if (e.target.matches('.pprog')) { state.people[i].prog = e.target.value.trim().toUpperCase().replace(/\s+/g, ' '); save(); render(); }
   else if (e.target.matches('.preqs')) {
     const p = state.people[i]; p.reqs = lines(e.target.value);
     if (p.ips && p.ips.pick) { p.ips.edits = p.ips.edits || {}; p.ips.edits[p.ips.pick] = [...p.reqs]; }   // a hand edit for this term only; the rest of the IPS stays
@@ -2235,6 +2290,7 @@ $('#peopleList').addEventListener('input', e => {
   }
 });
 $('#peopleList').addEventListener('change', async e => {
+  if (e.target.matches('[data-yr]')) { const i = +e.target.dataset.yr; state.people[i].yr = e.target.value; save(); render(); return; }
   if (e.target.matches('[data-side]')) { const i = +e.target.dataset.side; state.people[i].side = e.target.value; refreshReqs(); save(); syncSetup(); render(); }
   if (e.target.matches('[data-ips]')) {
     const i = +e.target.dataset.ips, file = e.target.files[0]; if (!file) return;
@@ -2312,6 +2368,18 @@ function aisisCopier() {
     var same = tm.every(function (x) { return x === tm[0]; });
     return { days: d.join(', '), time: !d.length ? (/TBA/.test(T) ? 'TBA' : T) : same ? tm[0] : tm.join(', ') };
   };
+  var slots = function (text) {
+    var CLS = { FRESHMAN: '1', FRESHMEN: '1', SOPHOMORE: '2', SOPHOMORES: '2', JUNIOR: '3', JUNIORS: '3', SENIOR: '4,5', SENIORS: '4,5' };
+    var groups = {}, order = [], add = function (k, ys) { if (!groups[k]) { groups[k] = []; order.push(k); } String(ys).split(',').forEach(function (y) { if (groups[k].indexOf(y) < 0) groups[k].push(y); }); };
+    var re = /(ALL|\d+)\s+SLOTS?(?:\s*\(S\))?\s+FOR\s+(?:(?:(\d)(?:ST|ND|RD|TH)\s+YEAR|(FRESHM[AE]N|SOPHOMORES?|JUNIORS?|SENIORS?))\s+)?([A-Z][A-Z0-9 &\/-]*?)\s+MAJORS?\b\.?/gi;
+    var re2 = /(?:(ALL|\d+)\s+SLOTS?(?:\s*\(S\))?\s+FOR\s+(FRESHM[AE]N|SOPHOMORES?|JUNIORS?|SENIORS?)\b(?:\s+ONLY)?|(?:\b(?:STRICTLY\s+)?FOR\s+)?\b(FRESHM[AE]N|SOPHOMORES?|JUNIORS?|SENIORS?)\s+ONLY\b)\.?/gi, m;
+    while ((m = re.exec(text))) add((m[1].toUpperCase() === 'ALL' ? '' : 'some ') + m[4].trim().toUpperCase().replace(/\s+/g, ' '), m[2] || (m[3] ? CLS[m[3].toUpperCase()] : '*'));
+    var rest = String(text).replace(re, ' ');
+    while ((m = re2.exec(rest))) add((m[1] && m[1].toUpperCase() !== 'ALL' ? 'some ' : '') + 'ANY', CLS[(m[2] || m[3]).toUpperCase()]);
+    var note = rest.replace(re2, ' ').replace(/\s+/g, ' ').replace(/^[\s.~]+|[\s~]+$/g, '').trim();
+    if (/^[.~\s]*$/.test(note)) note = '';
+    return { f: order.map(function (k) { var y = groups[k]; return k + (y.indexOf('*') < 0 ? ' ' + y.sort().join(',') : ''); }).join('; '), n: note.length > 200 ? note.slice(0, 197) + '...' : note };
+  };
   var read = function (tbl, trs, out, stat) {
     var head = Array.prototype.map.call((tbl.tHead || tbl).rows[0].cells, function (c) { return c.textContent.trim().toLowerCase(); });
     var at = function (n) { for (var i = 0; i < head.length; i++) if (head[i].indexOf(n) === 0) return i; return -1; };
@@ -2329,7 +2397,8 @@ function aisisCopier() {
       var sec = g(C.x), key = (subj + ' ' + sec).toUpperCase();
       if (stat.seen[key] && comp && stat.seen[key] !== comp) { sec = sec + ' ' + comp; key = (subj + ' ' + sec).toUpperCase(); }
       if (stat.seen[key]) return; stat.seen[key] = comp || 1;
-      out.push({ s: subj, x: sec, d: w.days, t: w.time, r: room, i: inst, l: lang, k: g(C.k).toUpperCase(), p: '' });
+      var sl = slots(g(C.k));
+      out.push({ s: subj, x: sec, d: w.days, t: w.time, r: room, i: inst, l: lang, k: g(C.k).toUpperCase(), p: '', f: sl.f, n: sl.n });
     });
   };
   var pairUp = function (list) {
@@ -2349,7 +2418,7 @@ function aisisCopier() {
       }
     });
   };
-  var tsv = function (list) { pairUp(list); return list.map(function (o) { return [o.s, o.x, o.d, o.t, o.r, o.i, o.p, o.l].join('\t'); }).join('\n'); };
+  var tsv = function (list) { pairUp(list); return list.map(function (o) { return [o.s, o.x, o.d, o.t, o.r, o.i, o.p, o.l, o.f, o.n].join('\t'); }).join('\n'); };
   var box = document.createElement('div'); box.id = 'ehx';
   box.setAttribute('style', 'position:fixed;top:16px;right:16px;z-index:99999;width:320px;background:#fffdf8;color:#24203a;border:2px solid #5b4bb7;border-radius:16px;padding:14px 16px;font:14px/1.45 system-ui,sans-serif;box-shadow:0 12px 30px rgba(36,32,58,.25)');
   var btn = 'border:0;border-radius:999px;padding:7px 13px;margin:6px 6px 0 0;font:600 13px system-ui,sans-serif;cursor:pointer;';
@@ -2417,8 +2486,8 @@ const canEditQ = p => !connected() || p === myIdx();
 function canEdit(p) { if (canEditQ(p)) return true; toast(`Only ${N(p)} can change ${N(p)}'s plan 🔒`); return false; }
 const fmtCode = c => { c = String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); return c.length === 8 ? c.slice(0, 4) + '-' + c.slice(4) : c.length === 10 ? c.slice(0, 5) + '-' + c.slice(5) : c; };
 const authBody = () => ({ id: SY().me.id, token: SY().me.token });
-const normMine = m => ({ name: m.name || '', emoji: m.emoji || '', reqs: m.reqs || [], picks: m.picks || [], tabPicks: m.tabPicks || null, backups: m.backups || {}, stars: m.stars || [], busy: m.busy || [], slots: m.slots || {}, locks: m.locks || [], drafts: m.drafts || [], notes: m.notes || {}, profs: m.profs || {}, ips: m.ips || null, side: m.side || 'L', ipsName: m.ipsName || '' });
-const pubOf = m => ({ name: m.name, emoji: m.emoji, reqs: m.reqs, picks: m.picks, tabPicks: m.tabPicks, backups: m.backups, stars: m.stars, busy: m.busy, slots: m.slots, locks: m.locks });
+const normMine = m => ({ name: m.name || '', emoji: m.emoji || '', reqs: m.reqs || [], picks: m.picks || [], tabPicks: m.tabPicks || null, backups: m.backups || {}, stars: m.stars || [], busy: m.busy || [], slots: m.slots || {}, locks: m.locks || [], prog: m.prog || '', yr: m.yr || '', drafts: m.drafts || [], notes: m.notes || {}, profs: m.profs || {}, ips: m.ips || null, side: m.side || 'L', ipsName: m.ipsName || '' });
+const pubOf = m => ({ name: m.name, emoji: m.emoji, reqs: m.reqs, picks: m.picks, tabPicks: m.tabPicks, backups: m.backups, stars: m.stars, busy: m.busy, slots: m.slots, locks: m.locks, prog: m.prog, yr: m.yr });
 const privOf = m => ({ drafts: m.drafts, notes: m.notes, profs: m.profs, ips: m.ips, side: m.side, ipsName: m.ipsName });
 const pending = () => connected() && JSON.stringify(SY().mine) !== SY().lastPushed;
 let needActive = false, materializing = false, pushTimer = null, pushing = false, pollTimer = null, lastSig = '', syncStatus = 'ok', pendingJoin = null;
@@ -2460,7 +2529,7 @@ function migratePicks(m) {
 }
 
 /* the view (state.people + row ticks) is rebuilt from your profile and your room's members */
-function personOf(m) { m = m || {}; return Object.assign(newPerson(), { name: m.name || '', emoji: m.emoji || '', reqs: m.reqs || [], backups: m.backups || {}, stars: m.stars || [], busy: m.busy || [], slots: m.slots || {}, locks: m.locks || [], drafts: m.drafts || [], ips: m.ips ? clone(m.ips) : null, side: m.side || 'L', ipsName: m.ipsName || '' }); }
+function personOf(m) { m = m || {}; return Object.assign(newPerson(), { name: m.name || '', emoji: m.emoji || '', reqs: m.reqs || [], backups: m.backups || {}, stars: m.stars || [], busy: m.busy || [], slots: m.slots || {}, locks: m.locks || [], prog: m.prog || '', yr: m.yr || '', drafts: m.drafts || [], ips: m.ips ? clone(m.ips) : null, side: m.side || 'L', ipsName: m.ipsName || '' }); }
 function materialize() {
   if (!connected()) return;
   const sy = SY(), rc = curRoom();
@@ -2487,11 +2556,11 @@ function extractMine() {
     picks = uniq([...(sy.mine.picks || []).filter(k => !present.has(k)), ...here]);
   }
   sy.mine = normMine({ name: p.name, emoji: p.emoji, reqs: p.reqs, picks, tabPicks,
-                       backups: p.backups, stars: p.stars, busy: p.busy, slots: p.slots, locks: p.locks, drafts: p.drafts, notes: state.notes, profs: state.profs, ips: p.ips, side: p.side, ipsName: p.ipsName });
+                       backups: p.backups, stars: p.stars, busy: p.busy, slots: p.slots, locks: p.locks, prog: p.prog, yr: p.yr, drafts: p.drafts, notes: state.notes, profs: state.profs, ips: p.ips, side: p.side, ipsName: p.ipsName });
 }
 function mineFromLocal() {
   const p = state.people[0] || newPerson();
-  return normMine({ name: p.name, emoji: p.emoji, reqs: p.reqs, picks: state.rows.filter(r => r.on[0]).map(keyOf), backups: p.backups, stars: p.stars, busy: p.busy, slots: p.slots, locks: p.locks, drafts: p.drafts, notes: state.notes, profs: state.profs, ips: p.ips, side: p.side, ipsName: p.ipsName });
+  return normMine({ name: p.name, emoji: p.emoji, reqs: p.reqs, picks: state.rows.filter(r => r.on[0]).map(keyOf), backups: p.backups, stars: p.stars, busy: p.busy, slots: p.slots, locks: p.locks, prog: p.prog, yr: p.yr, drafts: p.drafts, notes: state.notes, profs: state.profs, ips: p.ips, side: p.side, ipsName: p.ipsName });
 }
 function currentSig() {
   const sy = SY(), rc = curRoom(), me = sy.me ? sy.me.id : '';
@@ -3124,6 +3193,11 @@ function switchTab(t) {
 $$('[data-tab]').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
 $$('[data-theme-set]').forEach(b => b.addEventListener('click', () => { state.theme = b.dataset.themeSet; save(); applyTheme(); }));
 $('#fitsBtn').addEventListener('click', () => { state.fitsOnly = !state.fitsOnly; save(); render(); });
+$('#forBtn').addEventListener('click', () => {
+  const P = people()[state.active];
+  if (!P.prog && !yearOf(state.active)) { toast(`Add ${N(state.active) === 'You' ? 'your' : N(state.active) + '\'s'} program in Setup first (e.g. AB MEC).`, { label: 'go', fn: () => switchTab('setup') }); return; }
+  state.forMe = state.forMe === false; save(); render();
+});
 $('#pickFilter').addEventListener('click', e => { const b = e.target.closest('[data-f]'); if (!b) return; state.pickFilter = b.dataset.f; save(); render(); });
 $('#search').addEventListener('input', () => render());
 
@@ -3291,6 +3365,7 @@ document.addEventListener('click', async e => {
     case 'dcmp-off': state.draftCmp = []; save(); return render();
     case 'check-sort': state.checkSort = el.dataset.v; save(); return render();
     case 'fits-off': state.fitsOnly = false; save(); return render();
+    case 'for-off': state.forMe = false; save(); render(); return toast('showing every section · tap 🎓 only mine to hide the reserved ones again');
     case 'tips': return showTips();
     case 'show-straight': state.hideStraight = false; save(); render(); return toast('"classes straight" reminders are back');
     case 'hide-straight': state.hideStraight = true; save(); render(); return toast('hidden · turn it back on in Auto-build', { label: 'undo', fn: () => { state.hideStraight = false; save(); render(); } });
