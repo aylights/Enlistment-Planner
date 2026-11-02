@@ -1892,10 +1892,16 @@ function renderDraftStats(dp, dsel) {
 function renderSlot() {
   const el = $('#slotPanel');
   if (!slot) { el.innerHTML = `<p class="note-hand" style="text-align:center; margin-top:14px">tap an empty spot on the grid to see what's offered then ✎</p>`; return; }
-  const hits = state.rows.map((r, i) => i).filter(i => C.parsed[i].some(ps => ps.days.includes(slot.day) && ps.s <= slot.min && ps.e > slot.min));
+  const all = state.rows.map((r, i) => i).filter(i => C.parsed[i].some(ps => ps.days.includes(slot.day) && ps.s <= slot.min && ps.e > slot.min));
+  // only what someone here needs: their IPS subjects and chosen electives, not NSTP (it comes with its partner), not reserved for others
+  const shownP = people().map((_, p) => p).filter(p => state.weekShow[p]);
+  const needs = (i, p) => C.plans[p].items.some(x => x.subject && norm(x.subject) === norm(state.rows[i].subject)) && !blockedFor(i, p);
+  const mine = all.filter(i => state.rows[i].on.some(Boolean) || (!isAddOn(i) && shownP.some(p => needs(i, p))));
+  const hits = slot.all ? all : mine, more = all.length - mine.length;
   el.innerHTML = `<div class="card rv" style="margin-top:16px">
     <div class="row" style="margin:0; justify-content:space-between"><h3>${DAY_NAMES[slot.day]}, ${fmtT(slot.min)}</h3><button class="icon-btn" data-act="slot-close" aria-label="close">✕</button></div>
-    <p class="sub2">${hits.length ? 'Sections that meet at this time. Tap a name to add or remove it for that person.' : 'No sections meet at this time.'}</p>
+    <p class="sub2">${hits.length ? (slot.all ? 'Every section that meets at this time.' : 'Sections of your IPS subjects that meet at this time.') + ' Tap a name to add or remove it for that person.' : all.length ? 'None of your IPS subjects meet at this time.' : 'No sections meet at this time.'}</p>
+    ${!slot.all && more ? `<button class="btn small link" data-act="slot-all" style="margin-bottom:6px">+ ${more} other section${more > 1 ? 's' : ''} meet then · show all</button>` : slot.all && more ? `<button class="btn small link" data-act="slot-all" style="margin-bottom:6px">show only my IPS subjects</button>` : ''}
     ${hits.map(i => { const r = state.rows[i]; return `<div class="item"><div><div class="t">${esc(rowLabel(r))}</div><div class="m">${esc(whenText(C.parsed[i], r))}${r.instructor ? ' · ' + esc(r.instructor) : ''}</div></div>
       <div class="whochips">${people().map((_, p) => { const cl = !r.on[p] ? clashPreview(i, p) : []; return `<button class="who" style="${pv(p)}; padding:3px 10px 3px 3px; font-size:13px" data-act="slot-pick" data-i="${i}" data-p="${p}" aria-pressed="${!!r.on[p]}" title="${cl.length ? 'would clash with ' + esc(cl.join(', ')) : ''}">${crest(p, 'sm')}${r.on[p] ? '✓' : cl.length ? '⚠' : '+'}</button>`; }).join('')}</div></div>`; }).join('')}
   </div>`;
@@ -3493,6 +3499,7 @@ document.addEventListener('click', async e => {
       return;
     }
     case 'slot-close': slot = null; return render();
+    case 'slot-all': if (slot) slot.all = !slot.all; return render();
     case 'slot-pick': return togglePick(i, +el.dataset.p);
     case 'move': {
       const who = el.dataset.people.split(',').map(Number), mineOnly = who.filter(canEditQ);
