@@ -2677,6 +2677,7 @@ const normMine = m => ({ name: m.name || '', emoji: m.emoji || '', reqs: m.reqs 
 const pubOf = m => ({ name: m.name, emoji: m.emoji, reqs: m.reqs, picks: m.picks, tabPicks: m.tabPicks, byTab: m.byTab, backups: m.backups, stars: m.stars, busy: m.busy, slots: m.slots, locks: m.locks, prog: m.prog, yr: m.yr });
 const privOf = m => ({ drafts: m.drafts, notes: m.notes, profs: m.profs, ips: m.ips, side: m.side, ipsName: m.ipsName });
 const pending = () => connected() && JSON.stringify(SY().mine) !== SY().lastPushed;
+const roomV = {};   // the room version each poll last saw: unchanged rooms answer "same" without the sheet being read
 let needActive = false, materializing = false, pushTimer = null, pushing = false, pollTimer = null, lastSig = '', syncStatus = 'ok', pendingJoin = null;
 
 async function api(a, body = {}) {
@@ -2862,8 +2863,10 @@ async function poll() {
   try {
     if (sy.room) {
       let out;
-      try { out = await api('room', { code: sy.room, ...authBody() }); }
+      try { out = await api('room', { code: sy.room, since: sy.roomCache[sy.room] ? roomV[sy.room] : '', ...authBody() }); }
       catch (e) { if (e.code === 'noroom') { forgetRoom(sy.room, 'That room doesn\'t exist anymore.'); return schedulePoll(); } throw e; }
+      if (out.same) { if (Date.now() - (sy.offAt || 0) > 180000) await loadOfferings(sy.tab, true); setSyncStatus(pending() ? 'saving' : 'ok'); return schedulePoll(); }
+      roomV[sy.room] = out.v || '';
       if (out.signedOut) return signedOut('You were signed out on this device (your PIN was changed or reset).');
       const rc = out.room, meM = rc.members.find(m => m.id === sy.me.id);
       if (!meM) { forgetRoom(sy.room, `You're no longer in "${rc.name}".`); return schedulePoll(); }
