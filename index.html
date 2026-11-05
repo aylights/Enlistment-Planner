@@ -324,6 +324,10 @@
   .blk.busy { pointer-events: none; }
   .blk .s { font-weight: 500; opacity: .85; }
   .blk .pf { font-style: italic; }
+  .blk .tog { float: right; display: flex; margin: -1px -2px 0 4px; }
+  .blk .tog i { display: grid; place-items: center; width: 15px; height: 15px; margin-left: -4px; border-radius: 50%; background: var(--cs); color: var(--cd); border: 1.5px solid var(--c); font: 800 8px/1 var(--display); }
+  .tl.one .blk .tog i { width: 20px; height: 20px; font-size: 10px; }
+  @media (max-width: 640px) { .tl:not(.one) .blk.narrow .tog { display: none; } }
   .tl.one .blk { font-size: 13px; padding: 6px 9px; white-space: normal; }
   .slotmark { position: absolute; left: 0; right: 0; height: 2px; background: var(--accent); pointer-events: none; z-index: 4; }
   .slotmark::before { content: ""; position: absolute; left: -4px; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
@@ -1832,18 +1836,16 @@ function renderWeek() {
   renderDraftBar(dp, dsel);
   const L = dsel.length ? dsel.map((k, n) => ({ p: dp, color: n, label: draftLabel(dp, k), set: draftSet(dp, k), clashIn: true }))
     : shown.map(p => ({ p, color: p, label: N(p), set: C.picks[p] }));
-  const H = CONFIG.HOUR_PX, S = CONFIG.DAY_START, E = gridEnd(), lanes = Math.max(L.length, 1), lw = 96 / lanes;
-  const cols = DAY_SHORT.map(() => []);
-  const pos = (s, e, lane) => `top:${(s - S * 60) / 60 * H}px; height:${Math.max((e - s) / 60 * H, 18)}px; left:${2 + lane * lw}%; width:${lw - 1.5}%`;
-  L.forEach((ln, lane) => {
-    const p = ln.p;
-    people()[p].busy.forEach(b => b.days.forEach(d => cols[d].push(`<div class="blk busy" style="${pv(ln.color)}; ${pos(b.s, b.e, lane)}">${esc(b.label)}</div>`)));
-    ln.set.forEach(i => {
-      const r = state.rows[i], clash = ln.clashIn ? ln.set.some(j => j !== i && C.ov(i, j)) : C.conf[i][p].length > 0;
-      C.parsed[i].forEach(ps => ps.days.forEach(d => cols[d].push(`<div class="blk${clash ? ' clash' : ''}" style="${pv(ln.color)}; ${pos(ps.s, ps.e, lane)}"
-        data-act="goto" data-i="${i}" data-p="${p}" title="${esc(`${ln.label} · ${rowLabel(r)} · ${fmtRange(ps.s, ps.e)}${r.room ? ' · ' + r.room : ''}${r.instructor ? ' · ' + r.instructor : ''}`)}">${esc(r.subject)} ${esc(r.section)}${r.room ? `<br><span class="s">${esc(r.room)}</span>` : ''}${profShort(r.instructor, wd >= 0) ? `<br><span class="s pf">${esc(profShort(r.instructor, wd >= 0))}</span>` : ''}</div>`)));
-    });
-  });
+  const H = CONFIG.HOUR_PX, S = CONFIG.DAY_START, E = gridEnd();
+  const pos = b => `top:${(b.s - S * 60) / 60 * H}px; height:${Math.max((b.e - b.s) / 60 * H, 18)}px; left:${2 + b.col * 96 / b.n}%; width:${96 / b.n - 1.5}%`;
+  const cols = weekBlocks(L).map(list => list.map(b => {
+    const st = `${pv(b.who.map(n => L[n].color))}; ${pos(b)}`;
+    if (b.busy) return `<div class="blk busy" style="${st}">${esc(b.busy)}</div>`;
+    const r = b.r, pf = profShort(r.instructor, wd >= 0), names = b.who.map(n => L[n].label).join(' + ');
+    const dots = b.who.length > 1 ? `<span class="tog">${b.who.map(n => `<i style="${pv(L[n].color)}">${esc(dsel.length ? String(n + 1) : (people()[L[n].p].emoji || N(L[n].p)[0].toUpperCase()))}</i>`).join('')}</span>` : '';
+    return `<div class="blk${b.clash ? ' clash' : ''}${b.n > 1 ? ' narrow' : ''}" style="${st}" data-act="goto" data-i="${b.i}" data-p="${L[b.who[0]].p}"
+      title="${esc(`${names} · ${rowLabel(r)} · ${fmtRange(b.s, b.e)}${r.room ? ' · ' + r.room : ''}${r.instructor ? ' · ' + r.instructor : ''}`)}">${dots}${esc(r.subject)} ${esc(r.section)}${r.room ? `<br><span class="s">${esc(r.room)}</span>` : ''}${pf ? `<br><span class="s pf">${esc(pf)}</span>` : ''}</div>`;
+  }));
   if (!dsel.length && shown.length > 1) freeTogether(shown, E).forEach((g, d) => g.forEach(([s0, e0]) => cols[d].unshift(`<div class="freeblk" style="top:${(s0 - S * 60) / 60 * H}px; height:${(e0 - s0) / 60 * H}px" title="everyone shown is free ${fmtRange(s0, e0)}"><span>free together</span></div>`)));
   if (slot && days.includes(slot.day)) cols[slot.day].push(`<div class="slotmark" style="top:${(slot.min - S * 60) / 60 * H}px"></div>`);
   let axis = '';
@@ -1855,6 +1857,39 @@ function renderWeek() {
   renderSlot();
   if (dsel.length) renderDraftStats(dp, dsel); else renderWeekStats(shown);
   $('[data-act=save-image-week]').classList.toggle('hidden', !!dsel.length);
+}
+/* Week blocks per day, one per class meeting: a class people share is one block with all of them in it.
+   L: [{ p, color, label, set, clashIn }], one per person (or per draft when comparing drafts) */
+function weekBlocks(L) {
+  const byDay = DAY_SHORT.map(() => []), seen = new Map();
+  L.forEach((ln, n) => {
+    people()[ln.p].busy.forEach(b => b.days.forEach(d => byDay[d] && byDay[d].push({ d, s: b.s, e: b.e, busy: b.label || 'busy', who: [n] })));
+    ln.set.forEach(i => {
+      const clash = ln.clashIn ? ln.set.some(j => j !== i && C.ov(i, j)) : C.conf[i][ln.p].length > 0;
+      C.parsed[i].forEach(ps => ps.days.forEach(d => {
+        const k = `${i}|${d}|${ps.s}`, b = seen.get(k);
+        if (b) { b.who.push(n); b.clash = b.clash || clash; return; }
+        const nb = { d, s: ps.s, e: ps.e, i, r: state.rows[i], who: [n], clash };
+        seen.set(k, nb); byDay[d].push(nb);
+      }));
+    });
+  });
+  byDay.forEach(layoutDay);
+  return byDay;
+}
+/* Side by side only when blocks overlap in time (like a calendar app): a block on its own gets the full width */
+function layoutDay(list) {
+  list.sort((a, b) => a.s - b.s || b.e - a.e);
+  let group = [], ends = [], end = -1;
+  const close = () => { group.forEach(x => x.n = ends.length); group = []; ends = []; };
+  list.forEach(x => {
+    if (group.length && x.s >= end) close();
+    let c = ends.findIndex(t => t <= x.s);
+    if (c < 0) { c = ends.length; ends.push(0); }
+    ends[c] = x.e; x.col = c; group.push(x); end = group.length === 1 ? x.e : Math.max(end, x.e);
+  });
+  close();
+  return list;
 }
 /* An hour or more between classes when nobody shown has class or a busy time */
 function freeTogether(list, E) {
@@ -2182,11 +2217,8 @@ async function importCode(raw) {
 
 /* ======================= image export ======================= */
 async function saveImage(list) {
-  const blocks = [];
-  list.forEach((p, lane) => {
-    C.picks[p].forEach(i => C.parsed[i].forEach(ps => ps.days.forEach(d => blocks.push({ p, lane, d, s: ps.s, e: ps.e, r: state.rows[i] }))));
-    people()[p].busy.forEach(b => b.days.forEach(d => blocks.push({ p, lane, d, s: b.s, e: b.e, busy: b.label })));
-  });
+  const L = list.map(p => ({ p, color: p, label: N(p), set: C.picks[p] }));
+  const blocks = weekBlocks(L).flat();
   if (!blocks.some(b => !b.busy)) return toast('Nothing to show yet. Pick some classes first.');
   try { await document.fonts.ready; } catch (e) {}
   const S = Math.floor(Math.min(...blocks.map(b => b.s)) / 60), E = Math.ceil(Math.max(...blocks.map(b => b.e)) / 60);
@@ -2194,7 +2226,10 @@ async function saveImage(list) {
   const dark = document.documentElement.dataset.theme === 'dark';
   const col = dark ? { bg: '#16151f', paper: '#211f2d', ink: '#eeebf7', muted: '#a8a3bd', line: '#353247', dot: 'rgba(201,218,248,.08)', acc: '#a99bf0' }
                    : { bg: '#f6f2e9', paper: '#fffdf8', ink: '#24203a', muted: '#6b6683', line: '#e4dccb', dot: 'rgba(91,75,183,.12)', acc: '#5b4bb7' };
-  const W = 1240, pad = 48, axisW = 70, top = 150, hourH = 64, H = top + 50 + (E - S) * hourH + 90;
+  // wider days when blocks sit side by side, so names and rooms still fit
+  const most = Math.max(1, ...blocks.filter(b => b.d < days).map(b => b.n));
+  const pad = 48, axisW = 70, top = 150, hourH = 64, H = top + 50 + (E - S) * hourH + 90;
+  const W = Math.max(1240, Math.round(pad * 2 + axisW + 14 + days * Math.max(190, most * 165)));
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const g = cv.getContext('2d');
   g.fillStyle = col.bg; g.fillRect(0, 0, W, H);
@@ -2212,18 +2247,28 @@ async function saveImage(list) {
   g.textAlign = 'right'; g.font = '700 15px "DM Sans", sans-serif';
   for (let h = S; h <= E; h++) { const y = gy + (h - S) * hourH; g.fillStyle = col.muted; g.fillText(`${((h + 11) % 12) + 1}${h >= 12 ? 'pm' : 'am'}`, gx - 12, y + 5); g.strokeStyle = col.line; g.lineWidth = 1; g.beginPath(); g.moveTo(gx, y); g.lineTo(gx + gw, y); g.stroke(); }
   g.textAlign = 'left';
-  const lw = (cw - 12) / list.length, small = list.length > 2;
+  const tint = ids => { const P = ids.map(n => COLORS[L[n].color]); return P.length === 1 ? P[0] : { c: mix(P.map(k => k.c)), cs: mix(P.map(k => k.cs)), cd: mix(P.map(k => k.cd)) }; };
   blocks.filter(b => b.d < days).forEach(b => {
-    const x = gx + cw * b.d + 6 + b.lane * lw, y = gy + (b.s - S * 60) / 60 * hourH + 2, w = lw - 4, h = (b.e - b.s) / 60 * hourH - 4;
+    const cwIn = (cw - 12) / b.n, x = gx + cw * b.d + 6 + b.col * cwIn, y = gy + (b.s - S * 60) / 60 * hourH + 2, w = cwIn - 4, h = (b.e - b.s) / 60 * hourH - 4;
+    const K = tint(b.who), small = w < 150, dotR = 11, dotsW = b.who.length > 1 ? b.who.length * (dotR * 2 - 4) + 8 : 0;
     rr(x, y, w, h, 10);
-    if (b.busy) { g.save(); g.clip(); g.strokeStyle = COLORS[b.p].cs; g.lineWidth = 5; for (let t = -h; t < w; t += 12) { g.beginPath(); g.moveTo(x + t, y + h); g.lineTo(x + t + h, y); g.stroke(); } g.restore(); rr(x, y, w, h, 10); g.setLineDash([6, 4]); g.strokeStyle = COLORS[b.p].c; g.lineWidth = 2; g.stroke(); g.setLineDash([]); }
-    else { g.fillStyle = COLORS[b.p].cs; g.fill(); g.strokeStyle = COLORS[b.p].c; g.lineWidth = 2; g.stroke(); }
-    g.save(); rr(x, y, w, h, 10); g.clip(); g.fillStyle = COLORS[b.p].cd;
-    g.font = `800 ${small ? 13 : 16}px "Bricolage Grotesque", sans-serif`; g.fillText(b.busy || `${b.r.subject} ${b.r.section}`, x + 8, y + 21);
+    if (b.busy) { g.save(); g.clip(); g.strokeStyle = K.cs; g.lineWidth = 5; for (let t = -h; t < w; t += 12) { g.beginPath(); g.moveTo(x + t, y + h); g.lineTo(x + t + h, y); g.stroke(); } g.restore(); rr(x, y, w, h, 10); g.setLineDash([6, 4]); g.strokeStyle = K.c; g.lineWidth = 2; g.stroke(); g.setLineDash([]); }
+    else { g.fillStyle = K.cs; g.fill(); g.strokeStyle = K.c; g.lineWidth = 2; g.stroke(); }
+    g.save(); rr(x, y, w, h, 10); g.clip(); g.fillStyle = K.cd;
+    g.save(); g.beginPath(); g.rect(x, y, w - dotsW, 30); g.clip();   // the title stops before the faces
+    g.font = `800 ${small ? 14 : 16}px "Bricolage Grotesque", sans-serif`; g.fillText(b.busy || `${b.r.subject} ${b.r.section}`, x + 8, y + 21);
+    g.restore();
     g.font = `500 ${small ? 12 : 14}px "DM Sans", sans-serif`;
     const lines = b.busy ? [] : [b.r.room, profShort(b.r.instructor, false)].filter(Boolean);
     lines.push(fmtRange(b.s, b.e));
     lines.forEach((t, k) => g.fillText(t, x + 8, y + 39 + k * 17));
+    // shared class: everyone taking it, as little faces in the corner
+    if (b.who.length > 1) b.who.forEach((n, k) => {
+      const P = COLORS[L[n].color], cx = x + w - 8 - dotR - (b.who.length - 1 - k) * (dotR * 2 - 4), cy = y + 6 + dotR;
+      g.beginPath(); g.arc(cx, cy, dotR, 0, 7); g.fillStyle = P.cs; g.fill(); g.strokeStyle = P.c; g.lineWidth = 2; g.stroke();
+      g.fillStyle = P.cd; g.font = '800 11px "Bricolage Grotesque", sans-serif'; g.textAlign = 'center';
+      g.fillText(people()[L[n].p].emoji || N(L[n].p)[0].toUpperCase(), cx, cy + 4); g.textAlign = 'left';
+    });
     g.restore();
   });
   g.font = '700 24px Caveat, cursive'; g.fillStyle = col.muted; g.fillText('made with Enlistment Hub ✎', pad, H - 30);
@@ -2687,12 +2732,28 @@ function migratePicks(m) {
 const tabExtras = (m, tab) => m.byTab ? (m.byTab[tab] || { stars: [], backups: {}, locks: [] }) : { stars: m.stars || [], backups: m.backups || {}, locks: m.locks || [] };
 
 /* the view (state.people + row ticks) is rebuilt from your profile and your room's members */
+/* A friend's plan comes from the sheet, so anyone could have saved anything there with a script.
+   Keep only the shapes the site expects, so odd data can't break the page for the rest of the room. */
+const okObj = v => v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+const okStr = v => typeof v === 'string' ? v : typeof v === 'number' ? String(v) : '';
+const okStrs = v => Array.isArray(v) ? v.filter(x => typeof x === 'string') : [];
+const okDict = (v, f) => { const o = {}; Object.keys(okObj(v)).forEach(k => { if (!/^(__proto__|constructor|prototype)$/.test(k)) { const x = f(v[k]); if (x !== undefined) o[k] = x; } }); return o; };
+const okBusy = b => { b = okObj(b); const days = Array.isArray(b.days) ? b.days.filter(d => Number.isInteger(d) && d >= 0 && d <= 6) : [];
+  return days.length && Number.isFinite(b.s) && Number.isFinite(b.e) && b.s < b.e ? { label: okStr(b.label).slice(0, 40) || 'busy', days, s: b.s, e: b.e } : null; };
+function cleanPub(m) {
+  m = okObj(m);
+  const extras = x => ({ stars: okStrs(okObj(x).stars), backups: okDict(okObj(x).backups, okStrs), locks: okStrs(okObj(x).locks) });
+  return { name: okStr(m.name), emoji: okStr(m.emoji), reqs: okStrs(m.reqs), picks: okStrs(m.picks),
+    tabPicks: m.tabPicks == null ? null : okDict(m.tabPicks, okStrs), byTab: m.byTab == null ? null : okDict(m.byTab, extras),
+    backups: okDict(m.backups, okStrs), stars: okStrs(m.stars), busy: (Array.isArray(m.busy) ? m.busy : []).map(okBusy).filter(Boolean),
+    slots: okDict(m.slots, x => typeof x === 'string' ? x : undefined), locks: okStrs(m.locks), prog: okStr(m.prog), yr: okStr(m.yr) };
+}
 function personOf(m, tab) { m = m || {}; const x = tabExtras(m, tab); return Object.assign(newPerson(), { name: m.name || '', emoji: m.emoji || '', reqs: m.reqs || [], backups: clone(x.backups || {}), stars: [...(x.stars || [])], busy: m.busy || [], slots: m.slots || {}, locks: [...(x.locks || [])], prog: m.prog || '', yr: m.yr || '', drafts: m.drafts || [], ips: m.ips ? clone(m.ips) : null, side: m.side || 'L', ipsName: m.ipsName || '' }); }
 function materialize() {
   if (!connected()) return;
   const sy = SY(), rc = curRoom();
   const members = rc ? rc.members : [{ id: sy.me.id }];
-  const src = m => m.id === sy.me.id ? sy.mine : (m.pub || {});
+  const src = m => m.id === sy.me.id ? sy.mine : cleanPub(m.pub);
   state.people = members.map(m => personOf(src(m), sy.tab));
   const sets = members.map(m => new Set(picksFor(src(m), sy.tab)));
   state.rows.forEach(r => { const k = keyOf(r); r.on = [0, 1, 2, 3].map(p => p < sets.length && sets[p].has(k)); });
@@ -2785,7 +2846,7 @@ function applyMe(me, force) {
   sy.rooms = me.rooms || [];
   if (me.hasRec !== undefined) sy.hasRec = me.hasRec;
   if (force || (me.updated > sy.updated && !pending())) {
-    sy.mine = normMine({ ...me.pub, ...me.priv }); sy.updated = me.updated; sy.lastPushed = JSON.stringify(sy.mine);
+    sy.mine = normMine({ ...me.priv, ...cleanPub(me.pub) }); sy.updated = me.updated; sy.lastPushed = JSON.stringify(sy.mine);
   }
   if (sy.room && !sy.rooms.some(r => r.code === sy.room)) sy.room = '';
 }
@@ -2811,7 +2872,7 @@ async function poll() {
       const rc = out.room, meM = rc.members.find(m => m.id === sy.me.id);
       if (!meM) { forgetRoom(sy.room, `You're no longer in "${rc.name}".`); return schedulePoll(); }
       if (meM.updated > sy.updated && !pending()) {   // changed on another of your devices
-        sy.mine = normMine({ ...sy.mine, ...meM.pub }); sy.updated = meM.updated; sy.lastPushed = JSON.stringify(sy.mine);
+        sy.mine = normMine({ ...sy.mine, ...cleanPub(meM.pub) }); sy.updated = meM.updated; sy.lastPushed = JSON.stringify(sy.mine);
       }
       if (!sy.roomCache[rc.code]) needActive = true;   // first time we see this room: start on your own plan
       sy.roomCache[rc.code] = rc; upsertRoomList(rc);
@@ -2831,7 +2892,7 @@ function bestTab(out) {
   const sy = SY(), rc = curRoom(), want = new Set();
   const add = m => { (m.reqs || []).forEach(x => want.add(norm(x))); (m.picks || []).forEach(k => want.add(k.split(' ').slice(0, -1).join(' '))); };
   if (sy.mine) add(sy.mine);
-  if (rc) rc.members.forEach(m => add(m.pub || {}));
+  if (rc) rc.members.forEach(m => add(cleanPub(m.pub)));
   const score = t => (out.subjects[t] || []).filter(x => want.has(norm(x))).length;
   let best = out.sheet;
   out.tabs.forEach(t => { if (score(t) > score(best)) best = t; });
