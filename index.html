@@ -327,6 +327,9 @@
   .blk .tog { float: right; display: flex; margin: -1px -2px 0 4px; }
   .blk .tog i { display: grid; place-items: center; width: 15px; height: 15px; margin-left: -4px; border-radius: 50%; background: var(--cs); color: var(--cd); border: 1.5px solid var(--c); font: 800 8px/1 var(--display); }
   .tl.one .blk .tog i { width: 20px; height: 20px; font-size: 10px; }
+  .lanetags { display: flex; padding: 5px 2% 0; font: 600 11px var(--body); color: var(--muted); }
+  .lanetags span { flex: 1; display: flex; justify-content: center; align-items: center; gap: 4px; }
+  .lanetags i { display: inline-grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; background: var(--cs); color: var(--cd); border: 1.5px solid var(--c); font: 800 9px/1 var(--display); font-style: normal; }
   @media (max-width: 640px) { .tl:not(.one) .blk.narrow .tog { display: none; } }
   .tl.one .blk { font-size: 13px; padding: 6px 9px; white-space: normal; }
   .slotmark { position: absolute; left: 0; right: 0; height: 2px; background: var(--accent); pointer-events: none; z-index: 4; }
@@ -1837,21 +1840,23 @@ function renderWeek() {
   const L = dsel.length ? dsel.map((k, n) => ({ p: dp, color: n, label: draftLabel(dp, k), set: draftSet(dp, k), clashIn: true }))
     : shown.map(p => ({ p, color: p, label: N(p), set: C.picks[p] }));
   const H = CONFIG.HOUR_PX, S = CONFIG.DAY_START, E = gridEnd();
-  const pos = b => `top:${(b.s - S * 60) / 60 * H}px; height:${Math.max((b.e - b.s) / 60 * H, 18)}px; left:${2 + b.col * 96 / b.n}%; width:${96 / b.n - 1.5}%`;
+  const pos = b => `top:${(b.s - S * 60) / 60 * H}px; height:${Math.max((b.e - b.s) / 60 * H, 18)}px; left:${2 + b.col * 96 / b.n}%; width:${b.span * 96 / b.n - 1.5}%`;
   const cols = weekBlocks(L).map(list => list.map(b => {
     const st = `${pv(b.who.map(n => L[n].color))}; ${pos(b)}`;
     if (b.busy) return `<div class="blk busy" style="${st}">${esc(b.busy)}</div>`;
     const r = b.r, pf = profShort(r.instructor, wd >= 0), names = b.who.map(n => L[n].label).join(' + ');
     const dots = b.who.length > 1 ? `<span class="tog">${b.who.map(n => `<i style="${pv(L[n].color)}">${esc(dsel.length ? String(n + 1) : (people()[L[n].p].emoji || N(L[n].p)[0].toUpperCase()))}</i>`).join('')}</span>` : '';
-    return `<div class="blk${b.clash ? ' clash' : ''}${b.n > 1 ? ' narrow' : ''}" style="${st}" data-act="goto" data-i="${b.i}" data-p="${L[b.who[0]].p}"
+    return `<div class="blk${b.clash ? ' clash' : ''}${b.span < b.n ? ' narrow' : ''}" style="${st}" data-act="goto" data-i="${b.i}" data-p="${L[b.who[0]].p}"
       title="${esc(`${names} · ${rowLabel(r)} · ${fmtRange(b.s, b.e)}${r.room ? ' · ' + r.room : ''}${r.instructor ? ' · ' + r.instructor : ''}`)}">${dots}${esc(r.subject)} ${esc(r.section)}${r.room ? `<br><span class="s">${esc(r.room)}</span>` : ''}${pf ? `<br><span class="s pf">${esc(pf)}</span>` : ''}</div>`;
   }));
   if (!dsel.length && shown.length > 1) freeTogether(shown, E).forEach((g, d) => g.forEach(([s0, e0]) => cols[d].unshift(`<div class="freeblk" style="top:${(s0 - S * 60) / 60 * H}px; height:${(e0 - s0) / 60 * H}px" title="everyone shown is free ${fmtRange(s0, e0)}"><span>free together</span></div>`)));
   if (slot && days.includes(slot.day)) cols[slot.day].push(`<div class="slotmark" style="top:${(slot.min - S * 60) / 60 * H}px"></div>`);
+  const tag = n => dsel.length ? String(n + 1) : (people()[L[n].p].emoji || N(L[n].p)[0].toUpperCase());
+  const laneTags = L.length > 1 ? `<div class="lanetags">${L.map((ln, n) => `<span><i style="${pv(ln.color)}" title="${esc(ln.label)}">${esc(tag(n))}</i>${wd >= 0 ? ` ${esc(ln.label)}` : ''}</span>`).join('')}</div>` : '';
   let axis = '';
   for (let h = S + 1; h < E; h++) axis += `<span style="top:${(h - S) * H}px">${((h + 11) % 12) + 1}${h >= 12 ? 'pm' : 'am'}</span>`;
   grid.innerHTML = `<div class="tl ${wd >= 0 ? 'one' : ''}">
-    <div class="tl-head"><div style="width:50px; flex:none"></div>${days.map(d => `<div style="flex:1">${wd >= 0 ? DAY_NAMES[d] : DAY_SHORT[d]}</div>`).join('')}</div>
+    <div class="tl-head"><div style="width:50px; flex:none"></div>${days.map(d => `<div style="flex:1">${wd >= 0 ? DAY_NAMES[d] : DAY_SHORT[d]}${laneTags}</div>`).join('')}</div>
     <div class="tl-body" style="height:${(E - S) * H}px"><div class="tl-axis">${axis}</div>${days.map(d => `<div class="tl-col" data-act="slot" data-day="${d}">${cols[d].join('')}</div>`).join('')}</div>
   </div>`;
   renderSlot();
@@ -1874,22 +1879,13 @@ function weekBlocks(L) {
       }));
     });
   });
-  byDay.forEach(layoutDay);
-  return byDay;
-}
-/* Side by side only when blocks overlap in time (like a calendar app): a block on its own gets the full width */
-function layoutDay(list) {
-  list.sort((a, b) => a.s - b.s || b.e - a.e);
-  let group = [], ends = [], end = -1;
-  const close = () => { group.forEach(x => x.n = ends.length); group = []; ends = []; };
-  list.forEach(x => {
-    if (group.length && x.s >= end) close();
-    let c = ends.findIndex(t => t <= x.s);
-    if (c < 0) { c = ends.length; ends.push(0); }
-    ends[c] = x.e; x.col = c; group.push(x); end = group.length === 1 ? x.e : Math.max(end, x.e);
-  });
-  close();
-  return list;
+  // everyone keeps their own lane, so a gap in your lane always means you're free; a shared class
+  // stretches across the lanes of the people in it (split in two if someone in between isn't taking it)
+  return byDay.map(list => list.flatMap(b => {
+    const w = [...b.who].sort((x, y) => x - y), runs = [[w[0]]];
+    w.slice(1).forEach(n => n === runs[runs.length - 1].slice(-1)[0] + 1 ? runs[runs.length - 1].push(n) : runs.push([n]));
+    return runs.map(r => ({ ...b, who: w, col: r[0], span: r.length, n: L.length }));
+  }));
 }
 /* An hour or more between classes when nobody shown has class or a busy time */
 function freeTogether(list, E) {
@@ -2226,10 +2222,10 @@ async function saveImage(list) {
   const dark = document.documentElement.dataset.theme === 'dark';
   const col = dark ? { bg: '#16151f', paper: '#211f2d', ink: '#eeebf7', muted: '#a8a3bd', line: '#353247', dot: 'rgba(201,218,248,.08)', acc: '#a99bf0' }
                    : { bg: '#f6f2e9', paper: '#fffdf8', ink: '#24203a', muted: '#6b6683', line: '#e4dccb', dot: 'rgba(91,75,183,.12)', acc: '#5b4bb7' };
-  // wider days when blocks sit side by side, so names and rooms still fit
-  const most = Math.max(1, ...blocks.filter(b => b.d < days).map(b => b.n));
-  const pad = 48, axisW = 70, top = 150, hourH = 64, H = top + 50 + (E - S) * hourH + 90;
-  const W = Math.max(1240, Math.round(pad * 2 + axisW + 14 + days * Math.max(190, most * 165)));
+  // each person gets a lane wide enough for names and rooms; the photo grows to fit
+  const lanes = L.length, headH = lanes > 1 ? 74 : 50;
+  const pad = 48, axisW = 70, top = 150, hourH = 64, H = top + headH + (E - S) * hourH + 90;
+  const W = Math.max(1240, Math.round(pad * 2 + axisW + 14 + days * Math.max(190, lanes * 165)));
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const g = cv.getContext('2d');
   g.fillStyle = col.bg; g.fillRect(0, 0, W, H);
@@ -2240,16 +2236,21 @@ async function saveImage(list) {
   g.font = '700 30px Caveat, cursive'; g.fillStyle = col.acc; g.fillText(state.sheetName || 'enlistment plan ✎', pad, 120);
   let lx = W - pad;
   [...list].reverse().forEach(p => { const label = `${people()[p].emoji ? people()[p].emoji + ' ' : ''}${N(p)}`; g.font = '700 20px "DM Sans", sans-serif'; const w = g.measureText(label).width + 40; lx -= w + 8; rr(lx, 58, w, 38, 19); g.fillStyle = COLORS[p].cs; g.fill(); g.strokeStyle = COLORS[p].c; g.lineWidth = 2; g.stroke(); g.fillStyle = COLORS[p].cd; g.fillText(label, lx + 20, 84); });
-  const gx = pad + axisW, gw = W - pad - 14 - gx, cw = gw / days, gy = top + 50, gh = (E - S) * hourH;
-  rr(pad, top, W - pad * 2, gh + 70, 22); g.fillStyle = col.paper; g.fill(); g.strokeStyle = col.line; g.lineWidth = 1.5; g.stroke();
+  const gx = pad + axisW, gw = W - pad - 14 - gx, cw = gw / days, gy = top + headH, gh = (E - S) * hourH;
+  rr(pad, top, W - pad * 2, gh + headH + 20, 22); g.fillStyle = col.paper; g.fill(); g.strokeStyle = col.line; g.lineWidth = 1.5; g.stroke();
   g.font = '800 20px "Bricolage Grotesque", sans-serif'; g.fillStyle = col.ink; g.textAlign = 'center';
-  for (let d = 0; d < days; d++) g.fillText(DAY_SHORT[d], gx + cw * d + cw / 2, top + 34);
+  const face = (n, cx, cy, r) => { const P = COLORS[L[n].color]; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.fillStyle = P.cs; g.fill(); g.strokeStyle = P.c; g.lineWidth = 2; g.stroke();
+    g.fillStyle = P.cd; g.font = `800 ${r > 11 ? 12 : 11}px "Bricolage Grotesque", sans-serif`; g.textAlign = 'center'; g.fillText(people()[L[n].p].emoji || N(L[n].p)[0].toUpperCase(), cx, cy + 4); };
+  for (let d = 0; d < days; d++) {
+    g.font = '800 20px "Bricolage Grotesque", sans-serif'; g.fillStyle = col.ink; g.textAlign = 'center'; g.fillText(DAY_SHORT[d], gx + cw * d + cw / 2, top + 34);
+    if (lanes > 1) L.forEach((_, n) => face(n, gx + cw * d + 6 + (n + .5) * (cw - 12) / lanes, top + 55, 12));
+  }
   g.textAlign = 'right'; g.font = '700 15px "DM Sans", sans-serif';
   for (let h = S; h <= E; h++) { const y = gy + (h - S) * hourH; g.fillStyle = col.muted; g.fillText(`${((h + 11) % 12) + 1}${h >= 12 ? 'pm' : 'am'}`, gx - 12, y + 5); g.strokeStyle = col.line; g.lineWidth = 1; g.beginPath(); g.moveTo(gx, y); g.lineTo(gx + gw, y); g.stroke(); }
   g.textAlign = 'left';
   const tint = ids => { const P = ids.map(n => COLORS[L[n].color]); return P.length === 1 ? P[0] : { c: mix(P.map(k => k.c)), cs: mix(P.map(k => k.cs)), cd: mix(P.map(k => k.cd)) }; };
   blocks.filter(b => b.d < days).forEach(b => {
-    const cwIn = (cw - 12) / b.n, x = gx + cw * b.d + 6 + b.col * cwIn, y = gy + (b.s - S * 60) / 60 * hourH + 2, w = cwIn - 4, h = (b.e - b.s) / 60 * hourH - 4;
+    const lw = (cw - 12) / b.n, x = gx + cw * b.d + 6 + b.col * lw, y = gy + (b.s - S * 60) / 60 * hourH + 2, w = b.span * lw - 4, h = (b.e - b.s) / 60 * hourH - 4;
     const K = tint(b.who), small = w < 150, dotR = 11, dotsW = b.who.length > 1 ? b.who.length * (dotR * 2 - 4) + 8 : 0;
     rr(x, y, w, h, 10);
     if (b.busy) { g.save(); g.clip(); g.strokeStyle = K.cs; g.lineWidth = 5; for (let t = -h; t < w; t += 12) { g.beginPath(); g.moveTo(x + t, y + h); g.lineTo(x + t + h, y); g.stroke(); } g.restore(); rr(x, y, w, h, 10); g.setLineDash([6, 4]); g.strokeStyle = K.c; g.lineWidth = 2; g.stroke(); g.setLineDash([]); }
@@ -2263,12 +2264,7 @@ async function saveImage(list) {
     lines.push(fmtRange(b.s, b.e));
     lines.forEach((t, k) => g.fillText(t, x + 8, y + 39 + k * 17));
     // shared class: everyone taking it, as little faces in the corner
-    if (b.who.length > 1) b.who.forEach((n, k) => {
-      const P = COLORS[L[n].color], cx = x + w - 8 - dotR - (b.who.length - 1 - k) * (dotR * 2 - 4), cy = y + 6 + dotR;
-      g.beginPath(); g.arc(cx, cy, dotR, 0, 7); g.fillStyle = P.cs; g.fill(); g.strokeStyle = P.c; g.lineWidth = 2; g.stroke();
-      g.fillStyle = P.cd; g.font = '800 11px "Bricolage Grotesque", sans-serif'; g.textAlign = 'center';
-      g.fillText(people()[L[n].p].emoji || N(L[n].p)[0].toUpperCase(), cx, cy + 4); g.textAlign = 'left';
-    });
+    if (b.who.length > 1) { b.who.forEach((n, k) => face(n, x + w - 8 - dotR - (b.who.length - 1 - k) * (dotR * 2 - 4), y + 6 + dotR, dotR)); g.textAlign = 'left'; }
     g.restore();
   });
   g.font = '700 24px Caveat, cursive'; g.fillStyle = col.muted; g.fillText('made with Enlistment Hub ✎', pad, H - 30);
