@@ -393,6 +393,30 @@
 
   .foot { text-align: center; margin-top: 50px; }
 
+  /* ---------- easier start ---------- */
+  .start h3 { font-family: var(--display); font-weight: 800; font-size: 22px; margin: 0 0 10px; }
+  .start-grid { display: grid; grid-template-columns: 1.2fr 1fr .8fr; gap: 10px; }
+  @media (max-width: 520px) { .start-grid { grid-template-columns: 1fr 1fr; } .start-grid > :first-child { grid-column: 1 / -1; } }
+  #startCard { margin: 4px 0 6px; max-width: 560px; }
+  #qsProg::placeholder { text-transform: none; }
+  .sec-card { position: relative; }
+  .sec-card .topr { display: flex; align-items: center; gap: 2px; }
+  .sec-card .more { border: 0; background: transparent; color: var(--muted); font-size: 20px; line-height: 1; padding: 0 8px 6px; border-radius: 10px; cursor: pointer; }
+  .sec-card .more:hover { background: var(--surface-2); color: var(--ink); }
+  .badge-n { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 800; margin-left: 2px; }
+  #moreFilters { margin-top: -4px; }
+  .stage-toggle { display: none; }
+  @media (max-width: 900px) {
+    .stage-toggle { display: inline-flex; }
+    .stage.folded { padding: 12px 14px; }
+    .stage.folded .mini, .stage.folded .stage-sub, .stage.folded .drafts, .stage.folded .stage-share, .stage.folded .stage-head .crest { display: none; }
+    .stage.folded .stage-head { margin-bottom: 6px; }
+    .stage.folded .stats { margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .stage.folded .stat { padding: 6px 10px; min-width: 0; }
+    .stage.folded .stat b { font-size: 18px; }
+    .stage.folded .stat span { font-size: 11px; }
+  }
+
   /* ---------- notebook refresh ---------- */
   .logo { letter-spacing: -.01em; text-transform: none; color: var(--ink); font-size: 21px; display: inline-flex; align-items: baseline; gap: 7px; }
   .logo-mark { display: inline-grid; place-items: center; width: 30px; height: 30px; align-self: center; border-radius: 10px 10px 10px 3px; background: var(--accent); color: var(--accent-ink); font-size: 16px; transform: rotate(-6deg); }
@@ -467,6 +491,7 @@
     <section class="hero">
       <div>
         <h1>Plan your sched together</h1>
+        <div id="startCard" class="hidden"></div>
         <p class="lede">Load the class offerings and your IPS, pick sections without clashes, and line up classes with friends. Sync through your group's Google Sheet, or keep it all on this device.</p>
         <p class="note-hand hero-note">enlistment season, sorted ✎</p>
       </div>
@@ -612,9 +637,9 @@
       <div class="sec-head">
         <p class="eyebrow">the fun part</p>
         <h2>Pick your sections</h2>
-        <p class="sub">Choose whose plan you're editing, then tap a section to add it. You'll see clashes before you commit. Star favorites, jot notes, and mark backups as Plan B and C.</p>
+        <p class="sub">Tap a section to add it. Clashes show before you commit.</p>
       </div>
-      <div class="whobar"><div class="whochips" id="pickWho"></div></div>
+      <div class="whobar" id="pickWhoBar"><div class="whochips" id="pickWho"></div></div>
       <div class="studio">
         <aside class="stage stagebg" id="pickStage"></aside>
         <div>
@@ -625,9 +650,12 @@
               <button data-f="picked" aria-pressed="false">picked</button>
               <button data-f="starred" aria-pressed="false" aria-label="Starred only">★</button>
             </div>
+            <input type="text" id="search" placeholder="🔎 subject, prof, or a time like tue 2pm">
+            <button class="btn small ghost" id="filtersBtn" aria-expanded="false" aria-controls="moreFilters">filters</button>
+          </div>
+          <div class="toolbar hidden" id="moreFilters">
             <div class="seg" role="group"><button id="fitsBtn" aria-pressed="false" title="hide sections that clash with what's already picked or with busy times">✓ only what fits</button></div>
             <select id="forSel" aria-label="filter by course and year" title="hide sections reserved for other courses or years"></select>
-            <input type="text" id="search" placeholder="🔎 subject, prof, or a time like tue 2pm">
           </div>
           <div id="pickList"></div>
         </div>
@@ -747,7 +775,7 @@ const newPerson = () => ({ name: '', emoji: '', reqs: [], ipsAoa: null, ipsName:
 const freshSync = () => ({ url: '', me: null, mine: null, rooms: [], room: '', roomCache: {}, tab: '', tabs: [], tabPicked: false, offAt: 0, offSig: '', offVer: 0, updated: 0, lastPushed: '', seen: {}, asked: {}, hasRec: true });
 function freshState() {
   return { people: [newPerson()], rows: [], sheetName: '', sheetUrl: '', sem: 'auto', ranges: clone(CONFIG.RANGES), active: 0,
-           weekShow: [true, true, true, true], weekDay: null, pickFilter: 'need', theme: null, notes: {}, profs: {}, sync: freshSync(), electives: null };
+           weekShow: [true, true, true, true], weekDay: null, pickFilter: 'need', fitsOnly: true, theme: null, notes: {}, profs: {}, sync: freshSync(), electives: null };
 }
 const isOldSample = rows => (rows || []).some(r => r.instructor === 'REYES, Ana') && (rows || []).some(r => r.instructor === 'FLORES, Nico');
 function migrate() {
@@ -894,7 +922,7 @@ function readFile(file) {
 }
 function findIpsSheet(wb) {
   const t = norm(CONFIG.IPS_SHEET_NAME);
-  return wb.SheetNames.find(n => norm(n) === t) || wb.SheetNames.find(n => norm(n).includes('ips'));
+  return wb.SheetNames.find(n => norm(n) === t) || wb.SheetNames.find(n => norm(n).includes('ips') && !/^ips\s+\S/.test(norm(n)));   // "IPS AB MEC" tabs are course IPSes
 }
 function parseScheduleSheet(aoa) {
   let col = null, selCols = [];
@@ -991,6 +1019,12 @@ function ipsPick(p) {
   const term = termOf(state.sheetName);
   let cand = blocks.filter(b => b.c === col && (!term || b.t === term));
   if (!cand.length) cand = blocks.filter(b => b.c === col);
+  // a year they chose wins (it moves up by one for each later school year's tab)
+  if (+p.yr) {
+    const sy0 = syOf(state.sheetName), want = +p.yr + (p.yrSy != null && sy0 !== null ? sy0 - p.yrSy : 0);
+    const yc = cand.filter(b => YEARW[norm(b.y).split(' ')[0]] === want);
+    if (yc.length) return yc[0];
+  }
   const offered = new Set(state.rows.map(r => norm(r.subject)));
   const score = b => b.s.filter(x => offered.has(norm(x))).length;
   const best = cand.reduce((top, b) => score(b) > score(top) ? b : top, cand[0]);
@@ -1003,9 +1037,27 @@ function ipsPick(p) {
   }
   return best;
 }
+function setYear(p, y) { p.yr = y; p.yrSy = syOf(state.sheetName); }
 const syOf = name => { const m = String(name || '').match(/(\d{2})\s*[-–]\s*\d{2}/); return m ? +m[1] : null; };
+/* "IPS AB MEC" tabs in the sheet: a course's whole IPS. People in that course just pick their course and year. */
+function courseIpsFor(prog) {
+  const cs = state.courseIps || {}, mine = String(prog || '').split(/[,;\/]+/).map(norm).filter(Boolean);
+  const k = Object.keys(cs).find(c => mine.includes(norm(c)));
+  return k ? { course: k, aoa: cs[k] } : null;
+}
+const courseList = () => Object.keys(state.courseIps || {}).sort();
+function useCourseIps(p) {
+  if (p.ips && !p.ips.course) return;                       // a pasted IPS of their own always wins
+  if (p.ipsAoa) return;
+  const c = courseIpsFor(p.prog), blocks = c ? ipsBlocks(c.aoa) : [];
+  if (!blocks.length) { if (p.ips && p.ips.course) { p.ips = null; p.ipsName = ''; } return; }
+  if (!p.ips || p.ips.course !== c.course) p.ips = { blocks, pick: '', course: c.course };
+  else p.ips.blocks = blocks;                               // the sheet may have been updated
+  p.ipsName = `the ${c.course} IPS`; p.side = 'L';
+}
 function refreshReqs() {
   people().forEach(p => {
+    useCourseIps(p);
     const b = ipsPick(p);
     if (b) { p.ips.pick = `${b.y ? b.y + ' · ' : ''}${TERM_LABEL[b.t]}`; const ed = p.ips.edits && p.ips.edits[p.ips.pick]; p.reqs = ed ? [...ed] : reqsFromBlock(b); }
     else if (p.ipsAoa) p.reqs = extractRange(p.ipsAoa, state.ranges[semKey()][p.side]);
@@ -1431,14 +1483,15 @@ function renderPeople() {
       <label class="field">IPS subjects this semester · one per line</label>
       <textarea class="ruled preqs" data-i="${i}" placeholder="MATH 21&#10;ENG 12&#10;IE 2&#10;Management Elective&#10;…">${esc(p.reqs.join('\n'))}</textarea>
       ${p.ipsAoa || p.ips ? `<div class="ipsline">📜 from ${esc(p.ipsName || 'your IPS')}${p.ips && p.ips.pick ? ` · <b>${esc(p.ips.pick)}</b> (matches the open tab)` : ''}${p.ips && p.ips.edits && p.ips.edits[p.ips.pick] ? ` · edited by hand <button class="btn link" data-act="ips-reset" data-i="${i}">↺ use the IPS list</button>` : ''}${p.ipsAoa || uniq(((p.ips && p.ips.blocks) || []).map(b => b.c)).length > 1 ? ` · <select data-side="${i}"><option value="L" ${p.side === 'L' ? 'selected' : ''}>left program</option><option value="R" ${p.side === 'R' ? 'selected' : ''}>right program</option></select>` : ''}</div>` : ''}
-      <label class="field">🎓 Course & year · for classes reserved for certain courses</label>
+      <label class="field">🎓 Course & year${courseList().length ? ' · your course\'s IPS fills in your subjects' : ' · for classes reserved for certain courses'}</label>
       <div class="row" style="margin:0; gap:8px"><input type="text" class="pprog" data-i="${i}" list="dlProgs" maxlength="20" placeholder="e.g. AB MEC, SOSS, EC" value="${esc(p.prog || '')}" style="flex:1; min-width:120px; text-transform:uppercase">
         <select data-yr="${i}" style="width:auto">${['', '1', '2', '3', '4', '5'].map(y => `<option value="${y}" ${String(p.yr || '') === y ? 'selected' : ''}>${y ? ordinal(+y) + ' year' : `year: ${ipsYear(p) ? 'from your IPS (' + ordinal(ipsYear(p)) + ')' : 'from your IPS'}`}</option>`).join('')}</select></div>
       <label class="field">Busy times · org meetings, work, commute</label>
       <div class="chiplist">${p.busy.map((b, k) => `<span class="bchip">${esc(b.label)} · ${esc(busyText(b))}<button data-act="del-busy" data-i="${i}" data-b="${k}" aria-label="remove">✕</button></span>`).join('')}
         <button class="btn small ghost" data-act="add-busy" data-i="${i}">+ busy time</button></div>
       <div class="person-actions">
-        <button class="btn small ${p.ips ? 'ghost' : 'soft'}" data-act="ips-paste" data-i="${i}">📋 ${p.ips ? 'paste a new IPS' : 'paste your whole IPS'}</button>
+        ${courseIpsFor(p.prog) && p.ips && !p.ips.course ? `<button class="btn small soft" data-act="ips-course" data-i="${i}">🎓 use the ${esc(courseIpsFor(p.prog).course)} IPS</button>` : ''}
+        <button class="btn small ${p.ips ? 'ghost' : 'soft'}" data-act="ips-paste" data-i="${i}">📋 ${p.ips && p.ips.course ? 'paste your own IPS' : p.ips ? 'paste a new IPS' : 'paste your whole IPS'}</button>
         <label class="filelink">📜 ${p.ipsAoa || p.ips ? 'or use an IPS file' : 'or upload an IPS file'}<input type="file" data-ips="${i}" accept=".xlsx,.xls,.csv"></label>
         ${connected() ? '' : `<button class="btn link" data-act="share" data-i="${i}">🔗 share this plan</button>`}
       </div>
@@ -1454,7 +1507,41 @@ function renderClassList() {
     .map(({ r, i }) => `<div class="ci"><div class="t"><b>${esc(rowLabel(r))}</b> <span>· ${esc(r.days)} ${esc(r.time)}${r.room ? ' · ' + esc(r.room) : ''}${r.instructor ? ' · ' + esc(r.instructor) : ''}${profPref(r) === 'prefer' ? ' 👍' : profPref(r) === 'avoid' ? ' 👎' : ''}</span></div>
       <button class="icon-btn" data-act="note" data-i="${i}" title="notes" aria-label="Notes">📝</button>${connected() ? '' : `<button class="icon-btn" data-act="edit" data-i="${i}" title="edit" aria-label="Edit">✎</button><button class="icon-btn" data-act="del" data-i="${i}" title="delete" aria-label="Delete">✕</button>`}</div>`).join('') || '<div class="ci"><span class="t" style="color:var(--muted)">no matches</span></div>';
 }
+/* First visit: name, course and year, then straight to Pick. Your course's IPS fills in your subjects. */
+const startIdx = () => Math.max(0, myIdx());
+const needsStart = () => { const p = people()[startIdx()]; return !!p && !p.reqs.length && !p.ips && !p.ipsAoa; };
+function renderStart() {
+  const on = needsStart() && canEditQ(startIdx()), el = $('#startCard');
+  el.classList.toggle('hidden', !on); $('#panel-setup .lede').classList.toggle('hidden', on);
+  if (!on || el.contains(document.activeElement)) return;
+  const p = people()[startIdx()], cs = courseList();
+  el.innerHTML = `<div class="card start tape">
+    <h3>Get started</h3>
+    <div class="start-grid">
+      <div><label class="field">Your name</label><input type="text" id="qsName" maxlength="18" autocomplete="given-name" value="${esc(p.name)}" placeholder="e.g. Maria"></div>
+      <div><label class="field">Course</label><input type="text" id="qsProg" list="dlCourses" maxlength="20" value="${esc(p.prog || '')}" placeholder="${cs.length ? 'e.g. ' + esc(cs[0]) : 'e.g. AB MEC'}" style="text-transform:uppercase"></div>
+      <div><label class="field">Year</label><select id="qsYr">${['', '1', '2', '3', '4', '5'].map(y => `<option value="${y}" ${String(p.yr || '') === y ? 'selected' : ''}>${y ? ordinal(+y) + ' year' : 'choose'}</option>`).join('')}</select></div>
+    </div>
+    <datalist id="dlCourses">${uniq([...cs, ...[...$('#dlProgs').options].map(o => o.value)]).map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+    <div class="row" style="margin-top:14px"><button class="btn" data-act="qs-go">Start picking</button></div>
+    <p class="hint" style="margin:10px 0 0">${cs.length ? `Your subjects come from your course's IPS (ready for ${esc(cs.join(', '))}).` : 'Your subjects come from your IPS.'} Minor, shifting, or a different plan? <button class="bk" data-act="ips-paste" data-i="${startIdx()}">paste your own IPS</button></p>
+  </div>`;
+}
+async function quickStart() {
+  const i = startIdx(), p = state.people[i];
+  const name = $('#qsName').value.trim(), prog = $('#qsProg').value.trim().toUpperCase().replace(/\s+/g, ' '), yr = $('#qsYr').value;
+  if (!prog || !yr) { toast(!prog ? 'Type your course first, like AB MEC' : 'Choose your year'); (!prog ? $('#qsProg') : $('#qsYr')).focus(); return; }
+  if (name) p.name = name;
+  p.prog = prog; setYear(p, yr);
+  refreshReqs(); save(); syncSetup(); render();
+  if (p.ips && p.ips.course) { toast(`✦ ${p.reqs.length} subjects from the ${p.ips.course} IPS · ${p.ips.pick}`); return switchTab('pick'); }
+  const res = await openModal(`<h3>No ${esc(prog)} IPS here yet</h3><p>Paste your IPS once and the site fills in your subjects every semester. ${courseList().length ? `Ready-made IPSes so far: ${esc(courseList().join(', '))}.` : ''}</p>
+    <div class="row"><button class="btn small" data-choice="paste">paste my IPS</button><button class="btn small ghost" data-choice="">skip for now</button></div>`);
+  if (res && res.choice === 'paste') return pasteIps(i);
+  switchTab('pick');
+}
 function syncSetup() {
+  renderStart();
   renderSyncCard(); renderPeople(); renderClassList(); renderOffSynced(); renderElectiveRules();
   $('#semPick').value = state.sem;
   $$('[data-range]').forEach(inp => { const [s, k] = inp.dataset.range.split('.'); inp.value = state.ranges[s][k]; });
@@ -1476,6 +1563,7 @@ function setStatus(msg, err) { const el = $('#schedStatus'); el.textContent = ms
 /* ----- pick ----- */
 function renderPick() {
   whoChips($('#pickWho'), 'pick');
+  $('#pickWhoBar').classList.toggle('hidden', nP() < 2);   // alone: nothing to switch between (friends are added in Setup or the room menu)
   const a = state.active, stage = $('#pickStage'), list = $('#pickList'), P = people()[a];
   const reqs = uniq(P.reqs);
   const pr = progressOf(a), fx = fixesFor(a);
@@ -1486,7 +1574,8 @@ function renderPick() {
   if (runs.length && !state.hideStraight) alerts += `<div class="alert"><b>😵 ${Math.max(...runs.map(r => r.items.length))} classes straight on ${uniq(runs.map(r => DAY_SHORT[r.d])).join(', ')}</b>${straightText(runs)}
     <div class="row"><button class="btn small ghost" data-act="hide-straight">I'm fine with it · hide this</button></div></div>`;
   else if (runs.length) alerts += `<p class="hint" style="margin:8px 0 0">😵 "classes straight" reminders are hidden. <button class="bk" data-act="show-straight">show them</button></p>`;
-  stage.innerHTML = `<div class="stage-head"><div><div class="stage-title">${N(a) === 'You' ? 'Your' : esc(N(a)) + '\'s'} week</div><div class="stage-sub">${C.picks[a].length ? 'live preview · shaded = busy times' : 'picks show up here as you tap'}</div></div>${crest(a, 'lg')}</div>
+  stage.classList.toggle('folded', !state.stageOpen);
+  stage.innerHTML = `<div class="stage-head"><div><div class="stage-title">${N(a) === 'You' ? 'Your' : esc(N(a)) + '\'s'} week</div><div class="stage-sub">${C.picks[a].length ? 'live preview · shaded = busy times' : 'picks show up here as you tap'}</div></div><div class="row" style="margin:0; gap:8px; flex-wrap:nowrap"><button class="btn small ghost stage-toggle" data-act="stage-toggle" aria-expanded="${!!state.stageOpen}">${state.stageOpen ? 'hide week ▴' : 'show week ▾'}</button>${crest(a, 'lg')}</div></div>
     <div class="mini">${miniWeek(blocksFor(a, C.picks[a]), window.innerWidth < 900 ? 180 : 230)}</div>
     <div class="stats">
       <div class="stat"><b>${pr.req ? `${pr.done}/${pr.req}` : C.picks[a].length}</b><span>${pr.req ? 'IPS subjects set' : 'sections picked'}</span></div>
@@ -1496,7 +1585,7 @@ function renderPick() {
     ${alerts && canEditQ(a) ? `<div class="alerts">${alerts}</div>` : ''}
     ${canEditQ(a) ? `<div class="drafts">💾 ${P.drafts.some(draftHere) ? 'drafts:' : ''} ${P.drafts.map((d, k) => !draftHere(d) ? '' : `<span class="dchip"><button data-act="load-draft" data-d="${k}" title="load this draft">${esc(d.name)}</button><button data-act="del-draft" data-d="${k}" aria-label="delete draft">✕</button></span>`).join('')}
       <button class="btn small ghost" data-act="save-draft">save as draft</button></div>` : `<p class="viewing">👀 You're viewing ${esc(N(a))}'s plan. Only ${esc(N(a))} can change it.</p>`}
-    <div class="row">${connected() ? (SY().room ? `<button class="btn small" data-act="invite">👥 invite</button>` : `<button class="btn small" data-act="add-person-go">👥 compare with friends</button>`) : `<button class="btn small" data-act="share" data-i="${a}">🔗 share plan</button>`}<button class="btn small ghost" data-act="save-image" data-i="${a}">📸 save image</button></div>`;
+    <div class="row stage-share">${connected() ? (SY().room ? `<button class="btn small" data-act="invite">👥 invite</button>` : `<button class="btn small" data-act="add-person-go">👥 compare with friends</button>`) : `<button class="btn small" data-act="share" data-i="${a}">🔗 share plan</button>`}<button class="btn small ghost" data-act="save-image" data-i="${a}">📸 save image</button></div>`;
   if (!state.rows.length) { list.innerHTML = noClasses(); return; }
 
   let f = state.pickFilter;
@@ -1508,6 +1597,9 @@ function renderPick() {
   $('#forSel').innerHTML = opt('both', `🎓 ${c ? c : 'my course'}${y ? ' · ' + y : ''}`) + opt('course', `🎓 ${c || 'my course'} only, any year`) + opt('year', `🎓 ${y || 'my year'} only, any course`)
     + opt('off', '🎓 every course & year') + `<option value="edit">✎ ${c ? 'change' : 'set'} course & year…</option>`;
   $('#forSel').classList.toggle('on', forMeOn(a));
+  const nOn = (state.fitsOnly ? 1 : 0) + (forMeOn(a) ? 1 : 0);
+  $('#filtersBtn').innerHTML = `⚙ filters${nOn ? ` <span class="badge-n">${nOn}</span>` : ''}`;
+  $('#filtersBtn').title = [state.fitsOnly ? 'only what fits' : '', forMeOn(a) ? 'your course & year' : ''].filter(Boolean).join(' + ') || 'no filters on';
   $('#pickFilter [data-f=need]').textContent = N(a) === 'You' ? 'my subjects' : `${N(a)}'s subjects`;
   const q = norm($('#search').value), tq = timeQuery(q);
   const groups = new Map();
@@ -1637,7 +1729,7 @@ function secCard(i, a, bks) {
   if (picked && C.conf[i][a].length) flag = `<span class="flag bad">⚠ clashes with ${esc(C.conf[i][a].join(', '))}</span>`;
   else if (!picked) { const cl = clashPreview(i, a); if (cl.length) flag = `<span class="flag warn">would clash with ${esc(cl.join(', '))}</span>`; }
   return `<div class="sec-card" role="button" tabindex="0" aria-pressed="${picked}" style="${pv(a)}" id="row-${i}" data-act="pick" data-i="${i}">
-    <div class="top"><span class="nm">${esc(r.section) || '—'}${star ? '<span class="st">★</span>' : ''}</span>${bIdx >= 0 ? `<span class="flag plan">plan ${'BC'[bIdx]}</span>` : `<span class="chk">${picked ? '✓' : ''}</span>`}</div>
+    <div class="top"><span class="nm">${esc(r.section) || '—'}${star ? '<span class="st">★</span>' : ''}</span><span class="topr"><button class="more" data-act="more" data-i="${i}" aria-label="More for ${esc(rowLabel(r))}: backup, star, note${askable.length ? ', ask a friend' : ''}" title="backup, star, note${askable.length ? ', ask a friend' : ''}">⋯</button>${bIdx >= 0 ? `<span class="flag plan">plan ${'BC'[bIdx]}</span>` : `<span class="chk">${picked ? '✓' : ''}</span>`}</span></div>
     <span class="when">${esc(whenText(C.parsed[i], r))}</span>
     <span class="meta">${[r.room ? esc(r.room) : '', r.instructor ? `<button class="profbtn" data-act="prof" data-i="${i}" title="see all of ${esc(r.instructor)}'s sections">${esc(r.instructor)}${pp === 'prefer' ? ' 👍' : pp === 'avoid' ? ' 👎' : ''}</button>` : ''].filter(Boolean).join(' · ')}${r.pair ? ` · 🔗 ${esc(r.pair)}` : ''}</span>
     ${others.length ? `<span class="withs">with ${others.map(p => crest(p, 'sm')).join('')}</span>` : ''}
@@ -1647,10 +1739,28 @@ function secCard(i, a, bks) {
     ${rx && rx.list.length ? `<span class="reacts">${rx.list.map(x => `<span title="${esc(x.who.join(', '))}">${x.e} ${esc(x.who.join(', '))}</span>`).join('')}</span>` : ''}
     ${flag}
     ${rx && a !== me ? `<div class="rx" aria-label="react to ${esc(N(a))}'s pick">${REACTS.map(e => `<button data-act="react" data-i="${i}" data-e="${e}" aria-pressed="${rx.mine === e}" title="react ${e}">${e}</button>`).join('')}</div>` : ''}
-    <div class="cardfoot">${picked || !canEditQ(a) ? '' : `<button class="bk" data-act="backup" data-i="${i}">${bIdx >= 0 ? `remove plan ${'BC'[bIdx]}` : '+ backup'}</button>`}${canEditQ(a) ? `<button class="bk" data-act="star" data-i="${i}">${star ? '★ starred' : '☆ star'}</button>` : ''}<button class="bk" data-act="note" data-i="${i}">✎ note</button>${askable.length ? `<button class="bk" data-act="nudge" data-i="${i}">💌 ask ${askable.length === 1 ? esc(N(askable[0])) : 'friends'} to join</button>` : ''}</div>
+
   </div>`;
 }
 
+async function cardMenu(i) {
+  const a = state.active, r = state.rows[i], picked = !!r.on[a], can = canEditQ(a);
+  const bIdx = backupList(a, r.subject).indexOf(keyOf(r)), star = isStar(i, a);
+  const askable = SOC() && picked && a === myIdx() ? askableFor(i) : [];
+  const b = (v, t) => `<button class="btn small ghost" data-choice="${v}" style="justify-content:flex-start">${t}</button>`;
+  const res = await openModal(`<h3>${esc(rowLabel(r))}</h3><p class="hint" style="margin-top:2px">${esc(whenText(C.parsed[i], r))}${r.room ? ' · ' + esc(r.room) : ''}</p>
+    <div style="display:grid; gap:8px; margin-top:12px">
+      ${can && !picked ? b('backup', bIdx >= 0 ? `✕ remove as backup (plan ${'BC'[bIdx]})` : '↪ save as a backup, in case your pick fills up') : ''}
+      ${can ? b('star', star ? '☆ unstar' : '★ star it') : ''}
+      ${b('note', '✎ write a note')}
+      ${askable.length ? b('nudge', `💌 ask ${askable.length === 1 ? esc(N(askable[0])) : 'friends'} to join`) : ''}
+      ${r.instructor ? b('prof', `🧑‍🏫 all of ${esc(r.instructor)}'s sections`) : ''}
+    </div>
+    <div class="row"><button class="btn small ghost" data-choice="">close</button></div>`);
+  const c = res && res.choice;
+  if (c === 'backup') toggleBackup(i, a); else if (c === 'star') toggleStar(i, a); else if (c === 'note') editNote(i);
+  else if (c === 'nudge') nudgeFriends(i); else if (c === 'prof') profPage(i);
+}
 function scoreOf(set, p) {
   const days = dayLists(set);
   let nDays = 0, gaps = 0, first = 24 * 60, maxDay = 0, maxRow = 0, freeWeekday = false;
@@ -2150,6 +2260,8 @@ function loadWorkbook(wb, sourceName, snap) {
   schedWb = wb;
   const ipsName = findIpsSheet(wb), elName = wb.SheetNames.find(n => norm(n) === 'electives');
   if (elName) state.electives = sheetToAoa(wb.Sheets[elName]);
+  const ipsTabs = wb.SheetNames.filter(n => /^IPS\s+\S/i.test(n.trim()));
+  if (ipsTabs.length) state.courseIps = Object.fromEntries(ipsTabs.map(n => [n.trim().replace(/^IPS\s+/i, '').toUpperCase(), sheetToAoa(wb.Sheets[n])]));
   if (ipsName) {
     const aoa = sheetToAoa(wb.Sheets[ipsName]), blocks = ipsBlocks(aoa);
     ['L', 'R'].forEach((side, i) => { const p = state.people[i]; if (p && (!p.reqs.length || p.ipsAoa || p.ips)) Object.assign(p, { ipsAoa: blocks.length ? null : aoa, ips: blocks.length ? { blocks, pick: '' } : null, ipsName: sourceName, side: p.ipsAoa || p.ips ? p.side : side }); });
@@ -2278,7 +2390,7 @@ async function pasteIps(i) {
 $('#peopleList').addEventListener('input', e => {
   const i = +e.target.dataset.i;
   if (e.target.matches('.pname')) { state.people[i].name = e.target.value.trim(); if (!state.people[i].emoji) e.target.parentElement.querySelector('.crest').textContent = N(i)[0].toUpperCase(); save(); }
-  else if (e.target.matches('.pprog')) { state.people[i].prog = e.target.value.toUpperCase().replace(/\s+/g, ' ').replace(/^ /, ''); save(); render(); }
+  else if (e.target.matches('.pprog')) { state.people[i].prog = e.target.value.toUpperCase().replace(/\s+/g, ' ').replace(/^ /, ''); refreshReqs(); save(); render(); }
   else if (e.target.matches('.preqs')) {
     const p = state.people[i]; p.reqs = lines(e.target.value);
     if (p.ips && p.ips.pick) { p.ips.edits = p.ips.edits || {}; p.ips.edits[p.ips.pick] = [...p.reqs]; }   // a hand edit for this term only; the rest of the IPS stays
@@ -2287,7 +2399,7 @@ $('#peopleList').addEventListener('input', e => {
   }
 });
 $('#peopleList').addEventListener('change', async e => {
-  if (e.target.matches('[data-yr]')) { const i = +e.target.dataset.yr; state.people[i].yr = e.target.value; save(); render(); return; }
+  if (e.target.matches('[data-yr]')) { const i = +e.target.dataset.yr; setYear(state.people[i], e.target.value); refreshReqs(); save(); syncSetup(); render(); return; }
   if (e.target.matches('[data-side]')) { const i = +e.target.dataset.side; state.people[i].side = e.target.value; refreshReqs(); save(); syncSetup(); render(); }
   if (e.target.matches('[data-ips]')) {
     const i = +e.target.dataset.ips, file = e.target.files[0]; if (!file) return;
@@ -2750,7 +2862,8 @@ async function loadOfferings(tab, quiet) {
   if (out.subjects) sy.tabSubs = out.subjects;
   if (sy.mine && migratePicks(sy.mine)) { persist(); lastSig = ''; schedulePush(); }
   const rows = parseScheduleSheet(out.aoa).map(r => ({ ...r, on: [false, false, false, false] }));
-  const sig = JSON.stringify([out.sheet, rows.map(rowArr), out.electives || null]);   // the tab name counts too: two empty tabs are still different semesters
+  if (out.courseIps) state.courseIps = out.courseIps;
+  const sig = JSON.stringify([out.sheet, rows.map(rowArr), out.electives || null, out.courseIps || null]);   // the tab name counts too: two empty tabs are still different semesters
   if (sig !== sy.offSig) { sy.offSig = sig; sy.offVer++; state.rows = rows; state.sheetName = out.sheet; state.electives = out.electives || null; }
   if (!quiet) refreshFromSync(true);
 }
@@ -3026,11 +3139,11 @@ async function showTips(roomName) {
   state.tipsSeen = true; persist();
   const step = (n, t, d) => `<div style="display:grid; grid-template-columns:auto 1fr; gap:12px; align-items:start; margin-top:14px"><span class="crest" style="${pv(myIdx() >= 0 ? myIdx() : 0)}">${n}</span><div><b>${t}</b><br><span style="color:var(--muted); font-size:14px; line-height:1.4">${d}</span></div></div>`;
   const res = await openModal(`<h3>${roomName ? `Welcome to "${esc(roomName)}" ✦` : 'How it works ✦'}</h3><p>Three quick steps:</p>
-    ${step(1, '📋 Paste your whole IPS', 'Setup → paste your whole IPS. Do it once and the site fills in each semester\'s subjects for you.')}
+    ${step(1, '🎓 Your course and year', 'Pick them in Setup and your subjects fill in from your course\'s IPS. Or paste your own IPS if yours is different.')}
     ${step(2, '✎ Pick your sections', 'Tap a section to add it. Clashes show before you commit, and "only what fits" hides the ones that won\'t work.')}
     ${step(3, '👯 See who you\'re with', 'Compare shows the classes you share, what friends just picked, and 💌 requests to join their sections.')}
-    <div class="row" style="margin-top:18px"><button class="btn small" data-choice="ips">paste my IPS now</button><button class="btn small ghost" data-choice="">got it</button></div>`);
-  if (res && res.choice === 'ips') { switchTab('setup'); setTimeout(() => pasteIps(Math.max(0, myIdx())), 250); }
+    <div class="row" style="margin-top:18px"><button class="btn small" data-choice="ips">set up my subjects</button><button class="btn small ghost" data-choice="">got it</button></div>`);
+  if (res && res.choice === 'ips') { switchTab('setup'); setTimeout(() => { const f = $('#qsProg'); if (f && !$('#startCard').classList.contains('hidden')) f.focus(); else pasteIps(Math.max(0, myIdx())); }, 250); }
 }
 
 /* ----- room extras: activity, nudges, room notes, reactions ----- */
@@ -3260,6 +3373,10 @@ function switchTab(t) {
 }
 $$('[data-tab]').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
 $$('[data-theme-set]').forEach(b => b.addEventListener('click', () => { state.theme = b.dataset.themeSet; save(); applyTheme(); }));
+$('#filtersBtn').addEventListener('click', () => {
+  const open = $('#moreFilters').classList.toggle('hidden') === false;
+  $('#filtersBtn').setAttribute('aria-expanded', open);
+});
 $('#fitsBtn').addEventListener('click', () => { state.fitsOnly = !state.fitsOnly; save(); render(); });
 async function askCourse(a) {
   const P = people()[a];
@@ -3312,6 +3429,14 @@ document.addEventListener('click', async e => {
     case 'who':
       if (el.dataset.mode === 'week') state.weekShow[i] = !state.weekShow[i]; else state.active = i;
       save(); return render();
+    case 'qs-go': return quickStart();
+    case 'stage-toggle': state.stageOpen = !state.stageOpen; persist(); return render();
+    case 'more': return cardMenu(i);
+    case 'ips-course': {
+      const p = state.people[i], snap = snapshot();
+      Object.assign(p, { ips: null, ipsAoa: null, ipsName: '' }); refreshReqs(); save(); syncSetup(); render();
+      return undoable(`using the ${courseIpsFor(p.prog).course} IPS`, snap);
+    }
     case 'add-person': return addPerson(false);
     case 'add-person-go': return connected() ? friendsMenu() : addPerson(true);
     case 'remove-person': return removePerson(i);
