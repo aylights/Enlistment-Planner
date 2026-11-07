@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Enlistment Hub</title>
 <meta name="theme-color" content="#f3f1f8">
-<meta name="description" content="Plan your class enlistment with friends: pick sections, catch clashes and compare timetables.">
+<meta name="description" content="Plan your class enlistment with friends: pick sections, catch clashes and see everyone's week.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Caveat:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
@@ -341,7 +341,7 @@
   .hbars i { display: block; width: 100%; max-width: 30px; border-radius: 6px 6px 3px 3px; background: var(--c); min-height: 3px; transition: height .5s cubic-bezier(.3,1.4,.6,1); }
   .hbars i.zero { background: var(--line-2); }
 
-  /* ---------- compare & checklist ---------- */
+  /* ---------- room feed & checklist ---------- */
   .cols2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 20px; align-items: start; }
   .card h3 { font-family: var(--display); font-weight: 800; font-size: 22px; margin: 0; }
   .card .sub2 { color: var(--muted); font-size: 14px; margin: 4px 0 10px; }
@@ -480,7 +480,6 @@
       <button role="tab" data-tab="setup" aria-selected="true"><span class="tab-ic" aria-hidden="true">✎</span>Setup</button>
       <button role="tab" data-tab="pick" aria-selected="false"><span class="tab-ic" aria-hidden="true">✓</span>Pick</button>
       <button role="tab" data-tab="week" aria-selected="false"><span class="tab-ic" aria-hidden="true">▦</span>Week</button>
-      <button role="tab" data-tab="compare" aria-selected="false"><span class="tab-ic" aria-hidden="true">⇆</span>Compare</button>
       <button role="tab" data-tab="check" aria-selected="false"><span class="tab-ic" aria-hidden="true">☑</span><span class="tab-full">Checklist</span><span class="tab-short" aria-hidden="true">Check</span></button>
     </div>
     <div class="roombar hidden" id="roomBar"></div>
@@ -684,18 +683,7 @@
       <div id="weekGrid"></div>
       <div id="slotPanel"></div>
       <div class="wstats" id="weekStats"></div>
-    </section>
-  </main>
-
-  <!-- ======================= COMPARE ======================= -->
-  <main class="panel hidden" id="panel-compare">
-    <section class="sec">
-      <div class="sec-head">
-        <p class="eyebrow">besties who enlist together…</p>
-        <h2>Compare &amp; match up</h2>
-        <p class="sub">See which classes you share, line up the ones you could take together, and find free time for lunch or study sessions.</p>
-      </div>
-      <div id="compareBody"></div>
+      <div id="roomFeed"></div>
     </section>
   </main>
 
@@ -1443,7 +1431,6 @@ function render() {
   if (view === 'setup') renderHeroMini();
   if (view === 'pick') renderPick();
   if (view === 'week') renderWeek();
-  if (view === 'compare') renderCompare();
   if (view === 'check') renderCheck();
   renderBadge();
 }
@@ -1784,6 +1771,7 @@ function scoreOf(set, p) {
 /* ----- week ----- */
 function renderWeek() {
   whoChips($('#weekWho'), 'week');
+  $('#roomFeed').innerHTML = feedCard(); markFeedSeen();   // the room's "what's new" and 💌 requests
   const grid = $('#weekGrid');
   if (state.weekDay === null || state.weekDay === undefined) state.weekDay = window.innerWidth < 640 ? Math.min(Math.max(new Date().getDay() - 1, 0), 5) : -1;
   const wd = state.weekDay, days = wd < 0 ? [0, 1, 2, 3, 4, 5] : [wd];
@@ -1941,54 +1929,6 @@ function renderWeekStats(shown) {
       <div class="chips"><span class="chip">${fmtHrs(total)} of class a week</span><span class="chip">longest: ${DAY_SHORT[longest]} (${fmtHrs(mins[longest])})</span><span class="chip">earliest ${fmtT(first)}</span><span class="chip">latest ${fmtT(last)}</span><span class="chip">${gaps ? fmtHrs(gaps) + ' of breaks' : 'no breaks'}</span></div>
     </div>`;
   }).join('');
-}
-
-/* ----- compare ----- */
-function renderCompare() {
-  const el = $('#compareBody');
-  if (!state.rows.length) { el.innerHTML = noClasses(); return; }
-  if (nP() < 2 && connected()) { el.innerHTML = emptyBox('👯', 'Compare needs friends', SY().room ? 'Nobody else is in this room yet. Send them an invite!' : 'Make a room and invite friends, or join theirs with a code. You can be in several rooms and switch between them at the top.', SY().room ? `<button class="btn small" data-act="invite">👥 invite</button>` : `<button class="btn small" data-act="room-new">+ new room</button><button class="btn small ghost" data-act="room-join">join with a code</button>`); return; }
-  if (nP() < 2) { el.innerHTML = emptyBox('👯', 'Compare needs a friend', 'Add a friend in Setup, or paste the share link they sent you.', `<button class="btn small" data-act="add-person-go">+ add a friend</button><button class="btn small ghost" data-act="open-import">🔗 add a share code</button>`); return; }
-  markFeedSeen();
-  const together = state.rows.map((r, i) => ({ i, who: people().map((_, p) => r.on[p] ? p : -1).filter(p => p >= 0) })).filter(x => x.who.length >= 2);
-  const tHtml = together.length ? together.map(x => `<div class="item"><div><div class="t">${esc(rowLabel(state.rows[x.i]))}</div><div class="m">${esc(whenText(C.parsed[x.i], state.rows[x.i]))}</div></div><span class="row" style="margin:0; gap:3px">${x.who.map(p => crest(p)).join('')}</span></div>`).join('')
-    : '<p class="hint">No shared sections yet. Check "match up" to find sections you can take together.</p>';
-  let mHtml = '';
-  uniq(state.rows.map(r => r.subject)).forEach(s => {
-    const k = norm(s);
-    const who = people().map((p, i) => (planHas(i, k) || C.picks[i].some(j => norm(state.rows[j].subject) === k)) ? i : -1).filter(i => i >= 0);
-    if (who.length < 2) return;
-    const cur = who.map(p => C.picks[p].find(j => norm(state.rows[j].subject) === k));
-    if (cur.every(j => j !== undefined && j === cur[0])) return;
-    const secs = state.rows.map((r, i) => norm(r.subject) === k ? i : -1).filter(i => i >= 0);
-    const fits = secs.filter(i => who.every(p => !clashPreview(i, p).length));
-    mHtml += `<div class="item"><div><div class="t">${esc(s)}</div><div class="wherelist">${who.map((p, n) => `<span>${crest(p, 'sm')} ${esc(N(p))}: ${cur[n] !== undefined ? 'section ' + esc(state.rows[cur[n]].section) : '<i>not picked</i>'}</span>`).join('')}</div></div>
-      <div style="display:grid; gap:6px; justify-items:end">${fits.length ? fits.slice(0, 3).map(i => `<button class="btn small soft" data-act="move" data-i="${i}" data-people="${who.join(',')}">${connected() ? 'me' : 'everyone'} → ${esc(state.rows[i].section)}</button>`).join('') : '<span class="flag warn">no section fits everyone yet</span>'}
-        ${(() => { const me = myIdx(), n = who.indexOf(me), mine = n >= 0 ? cur[n] : undefined; if (!SOC() || mine === undefined) return ''; const ask = who.filter(p => p !== me && cur[who.indexOf(p)] !== mine); return ask.length ? `<button class="btn small ghost" data-act="nudge-ask" data-i="${mine}" data-people="${ask.join(',')}">💌 ask ${ask.length === 1 ? esc(N(ask[0])) : 'them'} to join my ${esc(state.rows[mine].section)}</button>` : ''; })()}</div></div>`;
-  });
-  if (!mHtml) mHtml = '<p class="hint">Nothing to match. Everyone who shares a subject is already together.</p>';
-  const busy = DAY_SHORT.map(() => []);
-  let any = false;
-  C.picks.forEach((list, p) => {
-    list.forEach(i => { any = true; C.parsed[i].forEach(ps => ps.days.forEach(d => busy[d].push([ps.s, ps.e]))); });
-    people()[p].busy.forEach(b => b.days.forEach(d => busy[d].push([b.s, b.e])));
-  });
-  let fHtml = '';
-  if (!any) fHtml = '<p class="hint">Pick some classes first.</p>';
-  else DAY_SHORT.forEach((d, di) => {
-    const iv = busy[di].sort((x, y) => x[0] - y[0]);
-    if (!iv.length) return;
-    const gaps = []; let t = CONFIG.DAY_START * 60;
-    iv.forEach(([s, e]) => { if (s - t >= 60) gaps.push([t, s]); t = Math.max(t, e); });
-    if (CONFIG.DAY_END * 60 - t >= 60) gaps.push([t, CONFIG.DAY_END * 60]);
-    fHtml += `<div class="freeday"><b>${d}</b><div>${gaps.length ? gaps.map(([s, e]) => `<span class="freechip">${fmtRange(s, e)}</span>`).join('') : '<span class="m">no common free hour</span>'}</div></div>`;
-  });
-  el.innerHTML = feedCard() + `<div class="cols2">
-    <div class="card tape rv"><h3>Match up</h3><p class="sub2">Subjects you share but aren't taking together yet, with sections that fit everyone's other picks and busy times.</p>${mHtml}</div>
-    <div style="display:grid; gap:20px">
-      <div class="card rv" style="--d:.08s"><h3>Classes together</h3><p class="sub2">Sections two or more of you picked.</p>${tHtml}</div>
-      <div class="card tape right rv" style="--d:.16s"><h3>Free together</h3><p class="sub2">An hour or more between 7am and 9pm when nobody has class or a busy time. Perfect for lunch or study sessions.</p>${fHtml}</div>
-    </div></div>`;
 }
 
 /* ----- checklist ----- */
@@ -2163,7 +2103,7 @@ async function importCode(raw) {
   (data.r || []).forEach(arr => { state.rows[ensureRow(arr)].on[slotIdx] = true; });
   (data.x || []).forEach(ensureRow);
   state.weekShow[slotIdx] = true; lastComplete = null;
-  save(); syncSetup(); switchTab('compare');
+  save(); syncSetup(); switchTab('week');
   undoable(`added ${N(slotIdx)}'s plan${added ? ` (+${added} class${added > 1 ? 'es' : ''} you didn't have)` : ''}`, snap);
 }
 
@@ -3056,7 +2996,7 @@ async function joinRoom(code) {
   try {
     const rc = (await api('joinRoom', { ...authBody(), code })).room;
     SY().roomCache[rc.code] = rc; upsertRoomList(rc); switchRoom(rc.code);
-    toast(`you're in "${rc.name}" ✦`); switchTab('compare');
+    toast(`you're in "${rc.name}" ✦`); switchTab('week');
     const me = state.people[myIdx()];
     if (!state.tipsSeen && me && !me.reqs.length && !me.ips) setTimeout(() => showTips(rc.name), 400);
   } catch (e) { toast(e.message); }
@@ -3122,7 +3062,7 @@ async function handleJoinHash(code, s) {
   if (!syncUrl()) return toast('This invite link is incomplete. Ask your friend to send it again.');
   if (connected()) {
     const c = fmtCode(code);
-    if (SY().rooms.some(r => r.code === c)) { switchRoom(c); return switchTab('compare'); }
+    if (SY().rooms.some(r => r.code === c)) { switchRoom(c); return switchTab('week'); }
     return joinRoom(code);
   }
   pendingJoin = code;
@@ -3141,7 +3081,7 @@ async function showTips(roomName) {
   const res = await openModal(`<h3>${roomName ? `Welcome to "${esc(roomName)}" ✦` : 'How it works ✦'}</h3><p>Three quick steps:</p>
     ${step(1, '🎓 Your course and year', 'Pick them in Setup and your subjects fill in from your course\'s IPS. Or paste your own IPS if yours is different.')}
     ${step(2, '✎ Pick your sections', 'Tap a section to add it. Clashes show before you commit, and "only what fits" hides the ones that won\'t work.')}
-    ${step(3, '👯 See who you\'re with', 'Compare shows the classes you share, what friends just picked, and 💌 requests to join their sections.')}
+    ${step(3, '👯 See who you\'re with', 'Week shows everyone side by side, when you\'re all free, what friends just picked, and 💌 requests to join their sections.')}
     <div class="row" style="margin-top:18px"><button class="btn small" data-choice="ips">set up my subjects</button><button class="btn small ghost" data-choice="">got it</button></div>`);
   if (res && res.choice === 'ips') { switchTab('setup'); setTimeout(() => { const f = $('#qsProg'); if (f && !$('#startCard').classList.contains('hidden')) f.focus(); else pasteIps(Math.max(0, myIdx())); }, 250); }
 }
@@ -3196,9 +3136,9 @@ function evText(e) {
 }
 const unreadCount = () => { const so = SOC(), me = SY().me && SY().me.id; if (!so) return 0; const seen = (SY().seen || {})[SY().room] || 0; return so.feed.filter(e => e.t > seen && e.by !== me).length + so.nudges.filter(n => n.to === me && n.st === 'new').length; };
 function renderBadge() {
-  const b = $('[data-tab=compare]'); if (!b) return;
-  const n = view === 'compare' ? 0 : unreadCount();
-  b.innerHTML = '<span class="tab-ic" aria-hidden="true">⇆</span>Compare' + (n ? `<span class="badge" aria-label="${n} new">${n > 9 ? '9+' : n}</span>` : '');
+  const b = $('[data-tab=week]'); if (!b) return;
+  const n = view === 'week' ? 0 : unreadCount();
+  b.innerHTML = '<span class="tab-ic" aria-hidden="true">▦</span>Week' + (n ? `<span class="badge" aria-label="${n} new">${n > 9 ? '9+' : n}</span>` : '');
 }
 let feedSeenAt = 0;
 function markFeedSeen() {
@@ -3534,14 +3474,6 @@ document.addEventListener('click', async e => {
     case 'slot-close': slot = null; return render();
     case 'slot-all': if (slot) slot.all = !slot.all; return render();
     case 'slot-pick': return togglePick(i, +el.dataset.p);
-    case 'move': {
-      const who = el.dataset.people.split(',').map(Number), mineOnly = who.filter(canEditQ);
-      if (!mineOnly.length) return toast('Only they can change their own plans 🔒');
-      const snap = snapshot(), msgs = [];
-      mineOnly.forEach(p => setPick(i, p, true, msgs));
-      save(); render();
-      return undoable(mineOnly.length < who.length ? `you're in ${rowLabel(state.rows[i])} ✦ friends need to switch on their own phones` : `everyone's in ${rowLabel(state.rows[i])} ✦`, snap);
-    }
     case 'invite': return SY().room ? inviteRoom(SY().room) : friendsMenu();
     case 'sync-url': return connectUrl();
     case 'sync-forget-url': SY().url = ''; persist(); return syncSetup();
@@ -3565,13 +3497,12 @@ document.addEventListener('click', async e => {
       delete p.ips.edits[p.ips.pick]; refreshReqs(); save(); syncSetup(); render(); return toast(`back to your IPS list for ${p.ips.pick}`);
     }
     case 'nudge': return nudgeFriends(i);
-    case 'nudge-ask': return nudgeFriends(i, el.dataset.people.split(',').map(Number));
     case 'nudge-yes': case 'nudge-no': case 'nudge-later': return answerNudge(el.dataset.nid, act.slice(6));
     case 'react': return reactTo(i, el.dataset.e);
     case 'sync-signout': return (await ask('Sign out on this device?', 'Your plan stays saved in the Google Sheet. Sign in again anytime with your personal code and PIN.', 'sign out')) && signOutDevice('Signed out. Your plan is still saved in the sheet.');
     case 'room-new': return newRoom();
     case 'room-join': return joinRoomPrompt();
-    case 'room-open': switchRoom(el.dataset.code); return switchTab('compare');
+    case 'room-open': switchRoom(el.dataset.code); return switchTab('week');
     case 'room-invite': return inviteRoom(el.dataset.code);
     case 'room-menu': return roomMenu(el.dataset.code);
     case 'off-refresh': return loadOfferings(SY().tab).then(() => toast('classes refreshed from the sheet ✦')).catch(err => toast(err.message));
