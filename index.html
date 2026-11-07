@@ -2727,6 +2727,10 @@ async function pushNow() {
   try {
     const out = await api('saveMe', { ...authBody(), pub: pubOf(sy.mine), priv: privOf(sy.mine), events: eventsFor(sy.lastPushed, sy.mine) });
     sy.lastPushed = js; sy.updated = out.updated; lastSig = currentSig(); persist();
+    if (out.name && sy.mine.name && out.name !== sy.mine.name) {
+      toast(`Someone already uses "${sy.mine.name}", so you're still "${out.name}". Try adding your last initial.`);
+      sy.mine.name = out.name; sy.lastPushed = JSON.stringify(sy.mine); materializing = true; materialize(); materializing = false; persist(); syncSetup(); render();
+    }
     setSyncStatus(pending() ? 'saving' : 'ok');
     if (pending()) schedulePush();
   } catch (e) {
@@ -2833,10 +2837,10 @@ function checkPin(res) {
   if (pin !== (res.pin2 || '').trim()) { toast('The two PINs don\'t match.'); return null; }
   return pin;
 }
-async function createProfile() {
+async function createProfile(tryName) {
   const local = state.people[0] || newPerson();
   const res = await openModal(`<h3>Create your profile</h3><p>Your plan saves to the group's Google Sheet, so it syncs across your devices and friends in your rooms can see it. Your current picks come along.</p>
-    <label class="field">Name</label><input type="text" data-field="name" maxlength="18" value="${esc(local.name)}" autofocus>
+    <label class="field">Name · you'll sign in with it, so make it yours (like "Maria C")</label><input type="text" data-field="name" maxlength="18" autocomplete="username" value="${esc(tryName !== undefined ? tryName : local.name)}" autofocus>
     ${pinFields()}
     <div class="row"><button class="btn small" data-choice="ok">create profile</button><button class="btn small ghost" data-choice="">cancel</button></div>`);
   if (!res || res.choice !== 'ok') return false;
@@ -2850,23 +2854,33 @@ async function createProfile() {
     const sy = SY();
     Object.assign(sy, { me: { id: out.id, token: out.token }, mine, lastPushed: JSON.stringify(mine), updated: out.updated, rooms: [], room: '', roomCache: {}, hasRec: true });
     const join = pendingJoin;
-    await openModal(`<h3>You're in! ✦</h3><p>Your personal code is</p><p class="bigcode">${fmtCode(out.id)}</p><p>With your PIN, it lets you sign in on another phone or laptop.</p>
+    await openModal(`<h3>You're in! ✦</h3><p>On another phone or laptop, sign in with your name <b>${esc(name)}</b> and your PIN.</p>
       <p>Your recovery code, in case you forget your PIN:</p><p class="bigcode" style="font-size:22px">${esc(out.rec)}</p>
       <p class="hint"><b>Screenshot this screen.</b> The recovery code works once and can't be shown again (you can make a new one in Setup).</p>
       <div class="row"><button class="btn small" data-choice="">${join ? 'join the room' : 'got it'}</button></div>`);
     await afterConnect();
     return true;
-  } catch (e) { toast(e.message); return false; }
+  } catch (e) {
+    toast(e.message);
+    if (e.code === 'nametaken') return createProfile(name + ' ');   // try again with their name, ready for an initial
+    return false;
+  }
 }
 async function signIn() {
-  const res = await openModal(`<h3>Sign in</h3><p>Enter the code of a room you're in, or your personal code.</p>
-    <input type="text" data-field="code" aria-label="Room or personal code" autocomplete="off" spellcheck="false" autocapitalize="characters" placeholder="XXXX-XXXX or XXXXX-XXXXX" autofocus style="margin-top:10px; text-transform:uppercase">
+  const res = await openModal(`<h3>Sign in</h3><p>Type the name you made your profile with.</p>
+    <input type="text" data-field="code" aria-label="Your name" autocomplete="username" spellcheck="false" placeholder="e.g. Maria C" autofocus style="margin-top:10px">
+    <p class="hint">A room code or your old personal code works here too.</p>
     <div class="row"><button class="btn small" data-choice="ok">next</button><button class="btn small ghost" data-choice="">cancel</button></div>`);
   if (!res || res.choice !== 'ok') return false;
-  const code = String(res.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  let id = '', who = '', rc = null;
-  if (code.length === 8) {
-    try { rc = (await api('room', { code })).room; } catch (e) { toast(e.message); return false; }
+  const typed = String(res.code || '').trim(), code = typed.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  // codes have a dash or a digit in them; anything else is a name
+  const bare = /^[A-Z0-9]{4,5}-?[A-Z0-9]{4,5}$/i.test(typed), looksCode = bare && (/-/.test(typed) || /\d/.test(typed));
+  let id = '', who = '', rc = null, name = '';
+  if (!typed) return false;
+  if (!looksCode && bare && code.length === 8) { try { rc = (await api('room', { code })).room; } catch (e) { rc = null; } }   // "abcdefgh": a room code typed without its dash?
+  if (!looksCode && !rc) { name = typed; who = typed; if (bare && code.length === 10) id = code; }
+  else if (code.length === 8) {
+    if (!rc) try { rc = (await api('room', { code })).room; } catch (e) { toast(e.message); return false; }
     const pick = await openModal(`<h3>Which one are you?</h3><p>People in "${esc(rc.name)}"</p>
       <div class="choice-list">${rc.members.map(m => `<button class="choice" data-choice="${esc(m.id)}"><span class="crest">${esc(m.emoji || (m.name || '?')[0].toUpperCase())}</span>${esc(m.name)}</button>`).join('')}</div>
       <div class="row"><button class="btn small ghost" data-choice="">cancel</button></div>`);
@@ -2878,14 +2892,14 @@ async function signIn() {
     <input type="password" data-field="pin" aria-label="PIN" autocomplete="current-password" maxlength="12" autofocus style="margin-top:10px">
     <p class="hint">Signing in replaces the plan on this device with your saved one.</p>
     <div class="row"><button class="btn small" data-choice="ok">sign in</button><button class="btn small ghost" data-choice="">cancel</button><button class="btn small link" data-choice="forgot">forgot PIN?</button></div>`);
-  if (pr && pr.choice === 'forgot') return recoverPin(id, rc);
+  if (pr && pr.choice === 'forgot') return recoverPin(id, rc, name);
   if (!pr || pr.choice !== 'ok') return false;
   try {
-    const out = await api('login', { id, pin: pr.pin });
+    const out = await api('login', { id, name, pin: pr.pin });
     return await finishSignIn(out, rc);
   } catch (e) { toast(e.message); return false; }
 }
-async function recoverPin(id, rc) {
+async function recoverPin(id, rc, name) {
   const res = await openModal(`<h3>Reset your PIN</h3><p>Enter the recovery code you got when you made your profile (it looks like <b class="code">ABCD-EFGH-JKMN</b>).</p>
     <input type="text" data-field="rec" aria-label="Recovery code" autocomplete="off" spellcheck="false" autocapitalize="characters" placeholder="XXXX-XXXX-XXXX" autofocus style="margin-top:10px; text-transform:uppercase">
     ${pinFields('New PIN')}
@@ -2894,7 +2908,7 @@ async function recoverPin(id, rc) {
   if (!res || res.choice !== 'ok') return false;
   const pin = checkPin(res); if (!pin) return false;
   try {
-    const out = await api('recover', { id, rec: res.rec, pin });
+    const out = await api('recover', { id, name, rec: res.rec, pin });
     await openModal(`<h3>PIN reset ✦</h3><p>Your old recovery code no longer works. Here's your new one:</p><p class="bigcode" style="font-size:22px">${esc(out.rec)}</p>
       <p class="hint"><b>Screenshot it.</b> Other devices were signed out.</p><div class="row"><button class="btn small" data-choice="">got it</button></div>`);
     return await finishSignIn(out, rc);
@@ -2916,7 +2930,7 @@ async function newRecovery() {
   try {
     const out = await api('newRecovery', authBody());
     SY().hasRec = true; persist(); syncSetup();
-    await openModal(`<h3>Your new recovery code</h3><p class="bigcode" style="font-size:22px">${esc(out.rec)}</p><p>If you forget your PIN, this resets it (together with your personal code). It works once.</p>
+    await openModal(`<h3>Your new recovery code</h3><p class="bigcode" style="font-size:22px">${esc(out.rec)}</p><p>If you forget your PIN, this resets it (together with your name). It works once.</p>
       <p class="hint"><b>Screenshot it.</b> It can't be shown again.</p><div class="row"><button class="btn small" data-choice="">got it</button></div>`);
   } catch (e) { toast(e.message); }
 }
@@ -3273,7 +3287,7 @@ function renderSyncCard() {
     `<div>${sy.rooms.length ? sy.rooms.map(roomItem).join('') : '<p class="hint" style="margin:0 0 10px">No rooms yet. Make one and invite your friends, or join theirs with a code.</p>'}</div>
     <div class="row" style="margin-top:0"><button class="btn small" data-act="room-new">+ new room</button><button class="btn small ghost" data-act="room-join">join with a code</button><button class="btn small link" data-act="tips">? how it works</button></div>
     <details ${sy.hasRec === false ? 'open' : ''}><summary>your account${sy.hasRec === false ? ' · <span style="color:var(--bad)">make a recovery code</span>' : ''}</summary>
-      <p class="hint">Your personal code is <b class="code">${fmtCode(sy.me.id)}</b>. Use it with your PIN to sign in on another device.</p>
+      <p class="hint">Sign in on another device with your name <b>${esc(sy.mine && sy.mine.name || '')}</b> and your PIN. (Backup: your personal code <b class="code">${fmtCode(sy.me.id)}</b> works too.)</p>
       ${sy.hasRec === false ? '<div class="alert"><b>🔑 No recovery code yet</b>Make one so you can reset your PIN if you forget it.</div>' : ''}
       <div class="row"><button class="btn small ghost" data-act="sync-pin">change PIN</button><button class="btn small ghost" data-act="sync-rec">🔑 new recovery code</button><button class="btn small ghost" data-act="sync-signout">sign out on this device</button></div>
     </details>`;
@@ -3436,7 +3450,7 @@ document.addEventListener('click', async e => {
     }
     case 'reset': {
       if (connected()) {
-        if (await ask('Sign out on this device?', 'Your plan stays saved in the Google Sheet. Sign in again anytime with your personal code and PIN.', 'sign out')) signOutDevice('Signed out. Your plan is still saved in the sheet.');
+        if (await ask('Sign out on this device?', 'Your plan stays saved in the Google Sheet. Sign in again anytime with your name and PIN.', 'sign out')) signOutDevice('Signed out. Your plan is still saved in the sheet.');
         return;
       }
       if (!(await ask('Start fresh?', 'This removes all classes, people, IPS lists, notes and picks from this browser.', 'start fresh', true))) return;
@@ -3499,7 +3513,7 @@ document.addEventListener('click', async e => {
     case 'nudge': return nudgeFriends(i);
     case 'nudge-yes': case 'nudge-no': case 'nudge-later': return answerNudge(el.dataset.nid, act.slice(6));
     case 'react': return reactTo(i, el.dataset.e);
-    case 'sync-signout': return (await ask('Sign out on this device?', 'Your plan stays saved in the Google Sheet. Sign in again anytime with your personal code and PIN.', 'sign out')) && signOutDevice('Signed out. Your plan is still saved in the sheet.');
+    case 'sync-signout': return (await ask('Sign out on this device?', 'Your plan stays saved in the Google Sheet. Sign in again anytime with your name and PIN.', 'sign out')) && signOutDevice('Signed out. Your plan is still saved in the sheet.');
     case 'room-new': return newRoom();
     case 'room-join': return joinRoomPrompt();
     case 'room-open': switchRoom(el.dataset.code); return switchTab('week');
