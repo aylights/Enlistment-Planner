@@ -983,17 +983,24 @@ function ipsBlocks(aoa) {
   const H = { 'intersession': 'int', 'summer': 'int', 'first semester': 's1', '1st semester': 's1', 'second semester': 's2', '2nd semester': 's2' };
   const cell = (r, c) => String(((aoa || [])[r] || [])[c] ?? '').trim();
   const blocks = [];
+  // a heading may carry more, like AISIS's curriculum page: "First Semester / Total Units: 21.0"
+  const termOfCell = v => { const n = norm(String(v).split(/\n/)[0]); return n.length < 40 ? H[n] || H[n.replace(/\s*total units.*$/, '')] : null; };
+  const skip = x => /^(subject code|course code|code|total units\b)/i.test(x);     // table header rows
+  const yearCell = x => /\byear\b/i.test(x) && x.length < 25;
+  const yearName = x => x.toLowerCase().replace(/\b\w/g, m => m.toUpperCase());
   (aoa || []).forEach((row, r) => (row || []).forEach((v, c) => {
-    const t = H[norm(v)]; if (!t) return;
+    const t = termOfCell(v); if (!t) return;
     const subs = [], descs = [];
     for (let k = r + 1; k < aoa.length; k++) {
       const x = cell(k, c);
-      if (!x) { if (!subs.length && k - r <= 2) continue; break; }
-      if (/^[\d.]+$/.test(x) || H[norm(x)] || /\byear\b/i.test(x)) break;
+      if (!x || skip(x)) { if (!subs.length && k - r <= 3) continue; break; }
+      if (/^[\d.]+$/.test(x) || termOfCell(x) || yearCell(x)) break;
       subs.push(x); descs.push(cell(k, c + 1));
     }
     let year = '';
-    for (let k = r - 1; k >= 0 && !year; k--) for (let cc = Math.max(0, c - 1); cc <= c + 3 && !year; cc++) { const x = cell(k, cc); if (/\byear\b/i.test(x) && x.length < 25) year = x.toLowerCase().replace(/\b\w/g, m => m.toUpperCase()); }
+    for (let k = r - 1; k >= 0 && !year; k--) for (let cc = Math.max(0, c - 1); cc <= c + 3 && !year; cc++) { const x = cell(k, cc); if (yearCell(x)) year = yearName(x); }
+    // a year heading centred over both tables (the curriculum page): the nearest one above, in any column
+    for (let k = r - 1; k >= 0 && !year; k--) { const x = (aoa[k] || []).map(v => String(v ?? '').trim()).find(yearCell); if (x) year = yearName(x); }
     if (subs.length) blocks.push({ y: year, t, c, s: subs, d: descs });
   }));
   return blocks;
@@ -1003,10 +1010,11 @@ function ipsPick(p) {
   const blocks = (p.ips && p.ips.blocks) || [];
   if (!blocks.length) return null;
   const cols = uniq(blocks.map(b => b.c)).sort((a, b) => a - b);
-  const col = p.side === 'R' ? cols[cols.length - 1] : cols[0];
+  const twoPeople = blocks.some((b, k) => blocks.some((o, j) => j !== k && o.y === b.y && o.t === b.t && o.c !== b.c));
+  const col = p.side === 'R' ? cols[cols.length - 1] : cols[0], inCol = b => !twoPeople || b.c === col;
   const term = termOf(state.sheetName);
-  let cand = blocks.filter(b => b.c === col && (!term || b.t === term));
-  if (!cand.length) cand = blocks.filter(b => b.c === col);
+  let cand = blocks.filter(b => inCol(b) && (!term || b.t === term));
+  if (!cand.length) cand = blocks.filter(inCol);
   // a year they chose wins (it moves up by one for each later school year's tab)
   if (+p.yr) {
     const sy0 = syOf(state.sheetName), want = +p.yr + (p.yrSy != null && sy0 !== null ? sy0 - p.yrSy : 0);
