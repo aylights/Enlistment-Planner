@@ -394,6 +394,12 @@
   .foot { text-align: center; margin-top: 50px; }
 
   /* ---------- easier start ---------- */
+  #panel-setup.simple > .sec, #panel-setup.simple .hero-vis, #panel-setup.simple .hero-note { display: none; }
+  #offCard.sheet .off-local-sub, #offCard .off-owner { display: none; }
+  #offCard.sheet .off-owner { display: inline; }
+  #offCard.sheet .aisisbm { order: 9; margin-top: 12px; }
+  #offCard.sheet { display: flex; flex-direction: column; }
+  #offCard.sheet #schedStatus, #offCard.sheet #classDetails { display: none; }   /* the sheet is the copy that counts */
   .start h3 { font-family: var(--display); font-weight: 800; font-size: 22px; margin: 0 0 10px; }
   .start-grid { display: grid; grid-template-columns: 1.2fr 1fr .8fr; gap: 10px; }
   @media (max-width: 520px) { .start-grid { grid-template-columns: 1fr 1fr; } .start-grid > :first-child { grid-column: 1 / -1; } }
@@ -536,10 +542,10 @@
           </details>
         </div>
 
-        <div class="card tape right rv" style="--d:.12s">
-          <div class="step-head"><span class="num">2</span><h3>Class offerings<small>The sections being offered this term. Upload the sheet, load it from a Google Sheets link, paste rows, or type them in.</small></h3></div>
+        <div class="card tape right rv" style="--d:.12s" id="offCard">
+          <div class="step-head"><span class="num">2</span><h3>Class offerings<small class="off-local-sub">The sections being offered this term. Upload the sheet, load it from a Google Sheets link, paste rows, or type them in.</small></h3></div>
           <details class="aisisbm">
-            <summary>📋 copy classes from AISIS (bookmark button)</summary>
+            <summary>📋 copy classes from AISIS (bookmark button)<span class="off-owner"> · for whoever runs the sheet</span></summary>
             <p class="hint" style="margin-top:6px">A bookmark you click while you're on AISIS's <b>Schedule of Classes</b> page. It copies every section shown, all pages, already in this site's format.</p>
             <ol class="hint" style="padding-left:18px; margin:6px 0">
               <li><b>Add the button once:</b> drag <a class="btn small" id="aisisBm" href="#" onclick="return false" draggable="true">📋 AISIS → Enlistment Hub</a> to your bookmarks bar. On a phone or if dragging doesn't work, make any bookmark, edit it, and replace its address with the code below.</li>
@@ -910,7 +916,7 @@ function readFile(file) {
 }
 function findIpsSheet(wb) {
   const t = norm(CONFIG.IPS_SHEET_NAME);
-  return wb.SheetNames.find(n => norm(n) === t) || wb.SheetNames.find(n => norm(n).includes('ips') && !/^ips\s+\S/.test(norm(n)));   // "IPS AB MEC" tabs are course IPSes
+  return wb.SheetNames.find(n => norm(n) === t) || wb.SheetNames.find(n => norm(n).includes('ips') && norm(n) !== 'course ips');   // "Course IPS" is everyone's course curricula, not one person's IPSes
 }
 function parseScheduleSheet(aoa) {
   let col = null, selCols = [];
@@ -985,7 +991,7 @@ function ipsBlocks(aoa) {
   const blocks = [];
   // a heading may carry more, like AISIS's curriculum page: "First Semester / Total Units: 21.0"
   const termOfCell = v => { const n = norm(String(v).split(/\n/)[0]); return n.length < 40 ? H[n] || H[n.replace(/\s*total units.*$/, '')] : null; };
-  const skip = x => /^(subject code|course code|code|total units\b)/i.test(x);     // table header rows
+  const skip = x => /^(subject code|course code|code|course title|title|description|units|prerequisites?|category|total units\b)$|^total units\b/i.test(x);     // table header words
   const yearCell = x => /\byear\b/i.test(x) && x.length < 25;
   const yearName = x => x.toLowerCase().replace(/\b\w/g, m => m.toUpperCase());
   (aoa || []).forEach((row, r) => (row || []).forEach((v, c) => {
@@ -993,7 +999,7 @@ function ipsBlocks(aoa) {
     const subs = [], descs = [];
     for (let k = r + 1; k < aoa.length; k++) {
       const x = cell(k, c);
-      if (!x || skip(x)) { if (!subs.length && k - r <= 3) continue; break; }
+      if (!x || skip(x)) { if (!subs.length && k - r <= 16) continue; break; }   // header words can come one per line
       if (/^[\d.]+$/.test(x) || termOfCell(x) || yearCell(x)) break;
       subs.push(x); descs.push(cell(k, c + 1));
     }
@@ -1035,13 +1041,14 @@ function ipsPick(p) {
 }
 function setYear(p, y) { p.yr = y; p.yrSy = syOf(state.sheetName); }
 const syOf = name => { const m = String(name || '').match(/(\d{2})\s*[-–]\s*\d{2}/); return m ? +m[1] : null; };
-/* "IPS AB MEC" tabs in the sheet: a course's whole IPS. People in that course just pick their course and year. */
+/* The sheet's "Course IPS" tab: each course's curriculum. People in that course just pick their course and year. */
 function courseIpsFor(prog) {
   const cs = state.courseIps || {}, mine = String(prog || '').split(/[,;\/]+/).map(norm).filter(Boolean);
-  const k = Object.keys(cs).find(c => mine.includes(norm(c)));
-  return k ? { course: k, aoa: cs[k] } : null;
+  const names = k => k.split(/\s*[,;]\s*/).map(norm);                // row 1 can list other names: "BS COMTECH, BS CTM"
+  const k = Object.keys(cs).find(c => names(c).some(n => mine.includes(n)));
+  return k ? { course: k.split(/\s*[,;]\s*/)[0], aoa: cs[k] } : null;
 }
-const courseList = () => Object.keys(state.courseIps || {}).sort();
+const courseList = () => Object.keys(state.courseIps || {}).map(k => k.split(/\s*[,;]\s*/)[0]).sort();
 function useCourseIps(p) {
   if (p.ips && !p.ips.course) return;                       // a pasted IPS of their own always wins
   if (p.ipsAoa) return;
@@ -1508,6 +1515,8 @@ const needsStart = () => { const p = people()[startIdx()]; return !!p && !p.reqs
 function renderStart() {
   const on = needsStart() && canEditQ(startIdx()), el = $('#startCard');
   el.classList.toggle('hidden', !on); $('#panel-setup .lede').classList.toggle('hidden', on);
+  // a first visit shows only "Get started"; everything else in Setup waits until that's done (or skipped)
+  $('#panel-setup').classList.toggle('simple', on && !state.startSkipped);
   if (!on || el.contains(document.activeElement)) return;
   const p = people()[startIdx()], cs = courseList();
   el.innerHTML = `<div class="card start tape">
@@ -1518,7 +1527,8 @@ function renderStart() {
       <div><label class="field">Year</label><select id="qsYr">${['', '1', '2', '3', '4', '5'].map(y => `<option value="${y}" ${String(p.yr || '') === y ? 'selected' : ''}>${y ? ordinal(+y) + ' year' : 'choose'}</option>`).join('')}</select></div>
     </div>
     <datalist id="dlCourses">${uniq([...cs, ...[...$('#dlProgs').options].map(o => o.value)]).map(c => `<option value="${esc(c)}">`).join('')}</datalist>
-    <div class="row" style="margin-top:14px"><button class="btn" data-act="qs-go">Start picking</button></div>
+    <div class="row" style="margin-top:14px"><button class="btn" data-act="qs-go">Start picking</button><button class="btn small ghost" data-act="qs-skip">skip, I'll set things up myself</button></div>
+    ${syncUrl() && !connected() ? `<p class="hint" style="margin:10px 0 0">Already have a profile? <button class="bk" data-act="sync-signin">sign in</button></p>` : ''}
     <p class="hint" style="margin:10px 0 0">${cs.length ? `Your subjects come from your course's IPS (ready for ${esc(cs.join(', '))}).` : 'Your subjects come from your IPS.'} Minor, shifting, or a different plan? <button class="bk" data-act="ips-paste" data-i="${startIdx()}">paste your own IPS</button></p>
   </div>`;
 }
@@ -1533,6 +1543,7 @@ async function quickStart() {
   const res = await openModal(`<h3>No ${esc(prog)} IPS here yet</h3><p>Paste your IPS once and the site fills in your subjects every semester. ${courseList().length ? `Ready-made IPSes so far: ${esc(courseList().join(', '))}.` : ''}</p>
     <div class="row"><button class="btn small" data-choice="paste">paste my IPS</button><button class="btn small ghost" data-choice="">skip for now</button></div>`);
   if (res && res.choice === 'paste') return pasteIps(i);
+  state.startSkipped = true; save(); syncSetup();   // no IPS for their course: show the rest of Setup (type subjects by hand there)
   switchTab('pick');
 }
 function syncSetup() {
@@ -2208,8 +2219,9 @@ function loadWorkbook(wb, sourceName, snap) {
   schedWb = wb;
   const ipsName = findIpsSheet(wb), elName = wb.SheetNames.find(n => norm(n) === 'electives');
   if (elName) state.electives = sheetToAoa(wb.Sheets[elName]);
-  const ipsTabs = wb.SheetNames.filter(n => /^IPS\s+\S/i.test(n.trim()));
-  if (ipsTabs.length) state.courseIps = Object.fromEntries(ipsTabs.map(n => [n.trim().replace(/^IPS\s+/i, '').toUpperCase(), sheetToAoa(wb.Sheets[n])]));
+  const cTab = wb.SheetNames.find(n => norm(n) === 'course ips'), cIps = {};
+  if (cTab) { const g = sheetToAoa(wb.Sheets[cTab]); (g[0] || []).forEach((h, c) => { const k = String(h || '').trim().toUpperCase(); if (k) cIps[k] = g.slice(1).map(r => [(r || [])[c] ?? '']); }); }
+  if (Object.keys(cIps).length) state.courseIps = cIps;
   if (ipsName) {
     const aoa = sheetToAoa(wb.Sheets[ipsName]), blocks = ipsBlocks(aoa);
     ['L', 'R'].forEach((side, i) => { const p = state.people[i]; if (p && (!p.reqs.length || p.ipsAoa || p.ips)) Object.assign(p, { ipsAoa: blocks.length ? null : aoa, ips: blocks.length ? { blocks, pick: '' } : null, ipsName: sourceName, side: p.ipsAoa || p.ips ? p.side : side }); });
@@ -2817,7 +2829,8 @@ async function loadOfferings(tab, quiet) {
   if (out.courseIps) state.courseIps = out.courseIps;
   const sig = JSON.stringify([out.sheet, rows.map(rowArr), out.electives || null, out.courseIps || null]);   // the tab name counts too: two empty tabs are still different semesters
   if (sig !== sy.offSig) { sy.offSig = sig; sy.offVer++; state.rows = rows; state.sheetName = out.sheet; state.electives = out.electives || null; }
-  if (!quiet) refreshFromSync(true);
+  if (connected()) { if (!quiet) refreshFromSync(true); }
+  else { C = compute(); refreshReqs(); save(); syncSetup(); render(); }   // no profile yet: the classes still show
 }
 
 /* ----- connecting ----- */
@@ -3311,14 +3324,15 @@ function roomItem(r) {
   </div>`;
 }
 function renderOffSynced() {
-  const on = connected();
+  const on = !!syncUrl();
+  $('#offCard').classList.toggle('sheet', on);
   $('#offLocal').classList.toggle('hidden', on);
   $('#offSynced').classList.toggle('hidden', !on);
   if (!on) return;
   const sy = SY();
-  $('#offSynced').innerHTML = `<p class="hint" style="margin-top:0">📗 Class offerings come straight from the group's Google Sheet. To fix or add a class, edit it in the sheet, then tap refresh (changes show up within about a minute).</p>
-    <div class="row">${(sy.tabs || []).length > 1 ? `<select id="tabSel" style="width:auto">${sy.tabs.map(t => `<option ${t === sy.tab ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>` : `<b>${esc(sy.tab || 'loading…')}</b>`}
-      <button class="btn small soft" data-act="off-refresh">↻ refresh</button></div>`;
+  $('#offSynced').innerHTML = `<div class="row" style="margin-top:0">${(sy.tabs || []).length > 1 ? `<select id="tabSel" style="width:auto">${sy.tabs.map(t => `<option ${t === sy.tab ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>` : `<b>${esc(sy.tab || 'loading…')}</b>`}
+      <button class="btn small soft" data-act="off-refresh">↻ refresh</button></div>
+    <p class="hint" style="margin:8px 0 0">${state.rows.length ? `✓ ${state.rows.length.toLocaleString()} sections loaded.` : 'Loading the classes…'} Wrong or missing class? Tell whoever runs the group's sheet.</p>`;
 }
 document.addEventListener('change', e => { if (e.target.id === 'tabSel') (SY().tabPicked = true, loadOfferings(e.target.value)).then(() => toast(`showing ${e.target.value}`)).catch(err => toast(err.message)); });
 window.addEventListener('resize', measureBars);
@@ -3392,6 +3406,7 @@ document.addEventListener('click', async e => {
       if (el.dataset.mode === 'week') state.weekShow[i] = !state.weekShow[i]; else state.active = i;
       save(); return render();
     case 'qs-go': return quickStart();
+    case 'qs-skip': state.startSkipped = true; save(); return syncSetup();
     case 'stage-toggle': state.stageOpen = !state.stageOpen; persist(); return render();
     case 'more': return cardMenu(i);
     case 'ips-course': {
@@ -3553,7 +3568,7 @@ if (hashParams.get('add')) setTimeout(() => importCode(hashParams.get('add')), 3
 if (connected()) {
   loadOfferings(SY().tab).catch(e => { setSyncStatus('err'); toast(e.message); });
   poll();
-}
+} else if (syncUrl()) loadOfferings(SY().tab || '').catch(e => toast(e.message));   // the class list needs no account
 if (hashParams.get('join')) setTimeout(() => handleJoinHash(hashParams.get('join'), hashParams.get('s')), 300);
 </script>
 </body>
