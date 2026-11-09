@@ -2580,7 +2580,7 @@ function aisisCopier() {
 })();
 
 /* ======================= Google Sheets sync: profiles & rooms ======================= */
-const SYNC_URL = 'https://script.google.com/macros/s/AKfycbzwAvXSTaAki0YhG5Eyhc9jlCyfmw-n6-EHqd_-pBNxCMTG6Rok53Yv2hxuyQVlx4h4/exec'; // your Apps Script web app URL (ends in /exec)
+const SYNC_URL = 'https://script.google.com/macros/s/AKfycbzp1oWg7Dn09sGSbVZVy5KtcnbRPHbznoo6U2GQU9kN1b-JfFNH2Fl7c8MU0EIrDpmV/exec'; // your Apps Script web app URL (ends in /exec)
 const SY = () => state.sync;
 const syncUrl = () => SYNC_URL || SY().url || '';
 const connected = () => !!(syncUrl() && SY().me && SY().mine);
