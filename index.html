@@ -1059,7 +1059,8 @@ function useCourseIps(p) {
   p.ipsName = `the ${c.course} IPS`; p.side = 'L';
 }
 function refreshReqs() {
-  people().forEach(p => {
+  people().forEach((p, i) => {
+    if (!canEditQ(i)) return;   // a friend's subjects come from their own saved plan
     useCourseIps(p);
     const b = ipsPick(p);
     if (b) { p.ips.pick = `${b.y ? b.y + ' · ' : ''}${TERM_LABEL[b.t]}`; const ed = p.ips.edits && p.ips.edits[p.ips.pick]; p.reqs = ed ? [...ed] : reqsFromBlock(b); }
@@ -2590,8 +2591,8 @@ const canEditQ = p => !connected() || p === myIdx();
 function canEdit(p) { if (canEditQ(p)) return true; toast(`Only ${N(p)} can change ${N(p)}'s plan 🔒`); return false; }
 const fmtCode = c => { c = String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); return c.length === 8 ? c.slice(0, 4) + '-' + c.slice(4) : c.length === 10 ? c.slice(0, 5) + '-' + c.slice(5) : c; };
 const authBody = () => ({ id: SY().me.id, token: SY().me.token });
-const normMine = m => ({ name: m.name || '', emoji: m.emoji || '', reqs: m.reqs || [], picks: m.picks || [], tabPicks: m.tabPicks || null, byTab: m.byTab || null, backups: m.backups || {}, stars: m.stars || [], busy: m.busy || [], slots: m.slots || {}, locks: m.locks || [], prog: m.prog || '', yr: m.yr || '', drafts: m.drafts || [], notes: m.notes || {}, profs: m.profs || {}, ips: m.ips || null, side: m.side || 'L', ipsName: m.ipsName || '' });
-const pubOf = m => ({ name: m.name, emoji: m.emoji, reqs: m.reqs, picks: m.picks, tabPicks: m.tabPicks, byTab: m.byTab, backups: m.backups, stars: m.stars, busy: m.busy, slots: m.slots, locks: m.locks, prog: m.prog, yr: m.yr });
+const normMine = m => ({ name: m.name || '', emoji: m.emoji || '', reqs: m.reqs || [], picks: m.picks || [], tabPicks: m.tabPicks || null, byTab: m.byTab || null, backups: m.backups || {}, stars: m.stars || [], busy: m.busy || [], slots: m.slots || {}, locks: m.locks || [], prog: m.prog || '', yr: m.yr || '', yrSy: m.yrSy ?? null, drafts: m.drafts || [], notes: m.notes || {}, profs: m.profs || {}, ips: m.ips || null, side: m.side || 'L', ipsName: m.ipsName || '' });
+const pubOf = m => ({ name: m.name, emoji: m.emoji, reqs: m.reqs, picks: m.picks, tabPicks: m.tabPicks, byTab: m.byTab, backups: m.backups, stars: m.stars, busy: m.busy, slots: m.slots, locks: m.locks, prog: m.prog, yr: m.yr, yrSy: m.yrSy });
 const privOf = m => ({ drafts: m.drafts, notes: m.notes, profs: m.profs, ips: m.ips, side: m.side, ipsName: m.ipsName });
 const pending = () => connected() && JSON.stringify(SY().mine) !== SY().lastPushed;
 const roomV = {};   // the room version each poll last saw: unchanged rooms answer "same" without the sheet being read
@@ -2660,9 +2661,9 @@ function cleanPub(m) {
   return { name: okStr(m.name), emoji: okStr(m.emoji), reqs: okStrs(m.reqs), picks: okStrs(m.picks),
     tabPicks: m.tabPicks == null ? null : okDict(m.tabPicks, okStrs), byTab: m.byTab == null ? null : okDict(m.byTab, extras),
     backups: okDict(m.backups, okStrs), stars: okStrs(m.stars), busy: (Array.isArray(m.busy) ? m.busy : []).map(okBusy).filter(Boolean),
-    slots: okDict(m.slots, x => typeof x === 'string' ? x : undefined), locks: okStrs(m.locks), prog: okStr(m.prog), yr: okStr(m.yr) };
+    slots: okDict(m.slots, x => typeof x === 'string' ? x : undefined), locks: okStrs(m.locks), prog: okStr(m.prog), yr: okStr(m.yr), yrSy: Number.isFinite(m.yrSy) ? m.yrSy : null };
 }
-function personOf(m, tab) { m = m || {}; const x = tabExtras(m, tab); return Object.assign(newPerson(), { name: m.name || '', emoji: m.emoji || '', reqs: m.reqs || [], backups: clone(x.backups || {}), stars: [...(x.stars || [])], busy: m.busy || [], slots: m.slots || {}, locks: [...(x.locks || [])], prog: m.prog || '', yr: m.yr || '', drafts: m.drafts || [], ips: m.ips ? clone(m.ips) : null, side: m.side || 'L', ipsName: m.ipsName || '' }); }
+function personOf(m, tab) { m = m || {}; const x = tabExtras(m, tab); return Object.assign(newPerson(), { name: m.name || '', emoji: m.emoji || '', reqs: m.reqs || [], backups: clone(x.backups || {}), stars: [...(x.stars || [])], busy: m.busy || [], slots: m.slots || {}, locks: [...(x.locks || [])], prog: m.prog || '', yr: m.yr || '', yrSy: m.yrSy ?? null, drafts: m.drafts || [], ips: m.ips ? clone(m.ips) : null, side: m.side || 'L', ipsName: m.ipsName || '' }); }
 function materialize() {
   if (!connected()) return;
   const sy = SY(), rc = curRoom();
@@ -2694,11 +2695,11 @@ function extractMine() {
     const e = byTab[sy.tab]; if (!e.stars.length && !e.locks.length && !Object.values(e.backups).some(l => l.length)) delete byTab[sy.tab];
   }
   sy.mine = normMine({ name: p.name, emoji: p.emoji, reqs: p.reqs, picks, tabPicks, byTab,
-                       backups: p.backups, stars: p.stars, busy: p.busy, slots: p.slots, locks: p.locks, prog: p.prog, yr: p.yr, drafts: p.drafts, notes: state.notes, profs: state.profs, ips: p.ips, side: p.side, ipsName: p.ipsName });
+                       backups: p.backups, stars: p.stars, busy: p.busy, slots: p.slots, locks: p.locks, prog: p.prog, yr: p.yr, yrSy: p.yrSy, drafts: p.drafts, notes: state.notes, profs: state.profs, ips: p.ips, side: p.side, ipsName: p.ipsName });
 }
 function mineFromLocal() {
   const p = state.people[0] || newPerson();
-  return normMine({ name: p.name, emoji: p.emoji, reqs: p.reqs, picks: state.rows.filter(r => r.on[0]).map(keyOf), backups: p.backups, stars: p.stars, busy: p.busy, slots: p.slots, locks: p.locks, prog: p.prog, yr: p.yr, drafts: p.drafts, notes: state.notes, profs: state.profs, ips: p.ips, side: p.side, ipsName: p.ipsName });
+  return normMine({ name: p.name, emoji: p.emoji, reqs: p.reqs, picks: state.rows.filter(r => r.on[0]).map(keyOf), backups: p.backups, stars: p.stars, busy: p.busy, slots: p.slots, locks: p.locks, prog: p.prog, yr: p.yr, yrSy: p.yrSy, drafts: p.drafts, notes: state.notes, profs: state.profs, ips: p.ips, side: p.side, ipsName: p.ipsName });
 }
 function currentSig() {
   const sy = SY(), rc = curRoom(), me = sy.me ? sy.me.id : '';
