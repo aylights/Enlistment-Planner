@@ -388,6 +388,14 @@
   .choice-list { display: grid; gap: 8px; margin-top: 12px; }
   .choice { text-align: left; display: flex; gap: 10px; align-items: center; border: 2px solid var(--line); background: var(--surface); border-radius: 14px; padding: 10px 12px; cursor: pointer; font-weight: 700; }
   .choice:hover { border-color: var(--accent); }
+  .modal .card.wide { width: min(900px, 100%); }
+  .ipsyrs { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 12px; border-radius: 18px; }
+  .ipsyrs button .n { font-weight: 500; opacity: .7; margin-left: 4px; }
+  .ipsterms { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 4px; }
+  @media (max-width: 700px) { .ipsterms { grid-template-columns: 1fr; } }
+  .ipsterms label.field { margin-top: 10px; }
+  .ipsterms .now { color: var(--accent); }
+  .ipsterms textarea.ruled { min-height: 182px; }
   .qr { display: grid; place-items: center; background: #fff; border-radius: 16px; padding: 12px; margin-top: 12px; }
   .qr svg { width: 100%; max-width: 280px; height: auto; display: block; }
 
@@ -516,29 +524,9 @@
             <button class="btn small ghost" data-act="add-person" id="addPersonBtn">+ add a friend</button>
             <button class="btn small ghost" data-act="open-import">🔗 add a friend's share code</button>
           </div>
-          <div class="grid2" style="margin-top:6px">
-            <div>
-              <label class="field">Semester (for IPS files)</label>
-              <select id="semPick">
-                <option value="auto">auto, from the schedule sheet's name</option>
-                <option value="SEM_1">1st semester</option>
-                <option value="SEM_2">2nd semester</option>
-              </select>
-            </div>
-          </div>
           <details>
             <summary>🎓 elective rules</summary>
             <div id="electiveRules"></div>
-          </details>
-          <details>
-            <summary>IPS file cell ranges</summary>
-            <p class="hint">IPS files are read automatically: the site finds each Intersession / First Semester / Second Semester list and uses the one that matches the open tab. These cell ranges are only a backup for IPS files laid out differently.</p>
-            <div class="grid2">
-              <div><label class="field">1st sem · left</label><input type="text" data-range="SEM_1.L"></div>
-              <div><label class="field">1st sem · right</label><input type="text" data-range="SEM_1.R"></div>
-              <div><label class="field">2nd sem · left</label><input type="text" data-range="SEM_2.L"></div>
-              <div><label class="field">2nd sem · right</label><input type="text" data-range="SEM_2.R"></div>
-            </div>
           </details>
         </div>
 
@@ -623,11 +611,11 @@
         </div>
 
         <div class="card rv" style="--d:.19s">
-          <div class="step-head"><span class="num">3</span><h3>Keep it safe<small>Everything is saved in this browser only. Export to take your picks back to Google Sheets.</small></h3></div>
+          <div class="step-head"><span class="num">3</span><h3>Keep it safe<small id="safeSub">Everything is saved in this browser only. Export to take your picks back to Google Sheets.</small></h3></div>
           <div class="row" style="margin-top:0">
             <button class="btn small" data-act="export">export .xlsx</button>
             <button class="btn small ghost" data-act="clear-picks">clear all picks</button>
-            <button class="btn small danger" data-act="reset">start fresh</button>
+            <button class="btn small danger" data-act="reset" id="resetBtn">start fresh</button>
           </div>
         </div>
 
@@ -715,7 +703,6 @@
 /* ======================= config ======================= */
 const CONFIG = {
   IPS_SHEET_NAME: 'Potential IPS',
-  RANGES: { SEM_1: { L: 'A10:A15', R: 'E10:E15' }, SEM_2: { L: 'A18:A25', R: 'E18:E24' } },
   DAY_START: 7, DAY_END: 21, HOUR_PX: 44, MAX_PEOPLE: 4, 
   WALK_MIN: 15,              // back-to-back classes in different buildings with less than this many minutes → warning
   STRAIGHT: [3, 30]          // warn at 3+ classes in a row, where "in a row" means less than 30 minutes between them
@@ -765,38 +752,14 @@ function crest(i, cls = '') {
 
 /* ======================= state ======================= */
 const STORE = 'enlistmentHub.v4';
-const newPerson = () => ({ name: '', emoji: '', reqs: [], ipsAoa: null, ipsName: '', ips: null, side: 'L', backups: {}, stars: [], busy: [], drafts: [], slots: {}, locks: [], prog: '', yr: '' });
-const freshSync = () => ({ url: '', me: null, mine: null, rooms: [], room: '', roomCache: {}, tab: '', tabs: [], tabPicked: false, offAt: 0, offSig: '', offVer: 0, updated: 0, lastPushed: '', seen: {}, asked: {}, hasRec: true });
+const newPerson = () => ({ name: '', emoji: '', reqs: [], ipsName: '', ips: null, side: 'L', backups: {}, stars: [], busy: [], drafts: [], slots: {}, prog: '', yr: '' });
+const freshSync = () => ({ url: '', me: null, mine: null, rooms: [], room: '', roomCache: {}, tab: '', tabs: [], tabPicked: false, offAt: 0, offSig: '', offVer: 0, offHash: '', updated: 0, lastPushed: '', seen: {}, asked: {}, hasRec: true });
 function freshState() {
-  return { people: [newPerson()], rows: [], sheetName: '', sheetUrl: '', sem: 'auto', ranges: clone(CONFIG.RANGES), active: 0,
+  return { people: [newPerson()], rows: [], sheetName: '', sheetUrl: '', active: 0,
            weekShow: [true, true, true, true], weekDay: null, pickFilter: 'need', fitsOnly: true, theme: null, notes: {}, profs: {}, sync: freshSync(), electives: null };
 }
-const isOldSample = rows => (rows || []).some(r => r.instructor === 'REYES, Ana') && (rows || []).some(r => r.instructor === 'FLORES, Nico');
-function migrate() {
-  try {
-    const v3 = JSON.parse(localStorage.getItem('enlistmentHub.v3'));
-    if (v3 && v3.rows && !isOldSample(v3.rows)) {
-      const s = freshState();
-      s.people = (v3.people || [newPerson()]).map(p => ({ ...newPerson(), ...p, backups: {} }));
-      s.rows = v3.rows; s.sheetName = v3.sheetName || ''; s.sem = v3.sem || 'auto';
-      if (v3.ranges) s.ranges = v3.ranges;
-      return s;
-    }
-    const v2 = JSON.parse(localStorage.getItem('enlistmentHub.v2'));
-    if (v2 && v2.rows) {
-      const s = freshState();
-      s.people = [{ ...newPerson(), name: v2.names?.p1 || '', reqs: v2.reqs?.p1 || [] }];
-      if (v2.names?.p2 || (v2.reqs?.p2 || []).length || v2.rows.some(r => r.p2)) s.people.push({ ...newPerson(), name: v2.names?.p2 || '', reqs: v2.reqs?.p2 || [] });
-      s.rows = v2.rows.map(r => ({ subject: r.subject, section: r.section, days: r.days, time: r.time, room: r.room, instructor: r.instructor, pair: r.pair, on: [!!r.p1, !!r.p2, false, false] }));
-      s.sheetName = v2.sheetName || ''; s.sem = v2.sem || 'auto';
-      return s;
-    }
-  } catch (e) {}
-  return null;
-}
 function load() {
-  try { const v = JSON.parse(localStorage.getItem(STORE)); if (v) return v; } catch (e) {}
-  return migrate();
+  try { return JSON.parse(localStorage.getItem(STORE)); } catch (e) { return null; }
 }
 function persist() { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} }
 /* every change goes through save(): when synced, your part of the view is copied into your profile and uploaded */
@@ -804,9 +767,9 @@ function save() { if (connected() && !materializing) { extractMine(); schedulePu
 function normalizeState() {
   const f = freshState();
   for (const k in f) if (state[k] === undefined) state[k] = f[k];
-  delete state.build;   // Auto-build is gone
+  ['build', 'sem', 'ranges'].forEach(k => delete state[k]);   // Auto-build and the old IPS cell ranges are gone
   state.sync = Object.assign(freshSync(), state.sync || {});
-  state.people = state.people.map(p => Object.assign(newPerson(), p));
+  state.people = state.people.map(p => { const q = Object.assign(newPerson(), p); delete q.locks; delete q.ipsAoa; return q; });
 }
 let state = Object.assign(freshState(), load() || {});
 normalizeState();
@@ -835,10 +798,11 @@ new MutationObserver(() => document.querySelectorAll('label.field:not([for])').f
 })).observe(document.documentElement, { childList: true, subtree: true });
 const smooth = () => matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
 let modalReturn = null;   // what had focus before the popup, so it gets focus back after
-function openModal(html) {
+function openModal(html, opts = {}) {
   if (modalResolve) { const r = modalResolve; modalResolve = null; r(null); }
   if ($('#modal').classList.contains('hidden')) modalReturn = document.activeElement;
   $('#modalCard').innerHTML = html;
+  $('#modalCard').classList.toggle('wide', !!opts.wide);
   const h = $('#modalCard h3'); if (h) { h.id = 'modalTitle'; $('#modalCard').setAttribute('aria-labelledby', 'modalTitle'); } else $('#modalCard').removeAttribute('aria-labelledby');
   $('#modal').classList.remove('hidden');
   setTimeout(() => { const f = $('#modal [autofocus]'); if (f && !$('#modalCard').contains(document.activeElement)) f.focus(); }, 50);
@@ -865,6 +829,12 @@ $('#modal').addEventListener('click', e => {
   if (e.target.id === 'modal') return closeModal(null);
   const pf = e.target.closest('[data-pfx]');
   if (pf) { $$('#modal [data-pfx]').forEach(b => b.setAttribute('aria-pressed', b === pf)); return filterSubList(); }
+  const mt = e.target.closest('[data-mtab]');
+  if (mt) {   // tabs inside a popup, like the years of the IPS editor
+    $$('#modal [data-mtab]').forEach(b => b.setAttribute('aria-pressed', b === mt));
+    $$('#modal [data-mpane]').forEach(x => { x.hidden = x.dataset.mpane !== mt.dataset.mtab; });
+    return;
+  }
   const sc = e.target.closest('[data-showclash]');
   if (sc) { sc.dataset.on = '1'; sc.hidden = true; return filterSubList(); }
   const set = e.target.closest('[data-mset]');
@@ -964,13 +934,6 @@ function parsePasted(text) {
     .map(l => (l.includes('\t') ? l.split('\t') : l.split(/\s{2,}/)).map(c => c.trim()));
   return parseScheduleSheet(aoa);
 }
-function extractRange(aoa, a1) {
-  if (!aoa || !a1) return [];
-  let r; try { r = XLSX.utils.decode_range(a1.trim()); } catch (e) { return []; }
-  const out = [];
-  for (let R = r.s.r; R <= r.e.r; R++) for (let K = r.s.c; K <= r.e.c; K++) { const v = String((aoa[R] || [])[K] ?? '').trim(); if (v) out.push(v); }
-  return out;
-}
 /* "SY 27-28 0th sem" → int, "…1st sem" → s1, "…2nd sem" → s2 */
 const TERM_LABEL = { int: 'Intersession', s1: 'First Semester', s2: 'Second Semester' };
 function termOf(name) {
@@ -979,10 +942,6 @@ function termOf(name) {
   if (/(2nd|second|sem ?2)/.test(n)) return 's2';
   if (/(1st|first|sem ?1)/.test(n)) return 's1';
   return null;
-}
-function semKey() {
-  if (state.sem !== 'auto') return state.sem;
-  return termOf(state.sheetName) === 's2' ? 'SEM_2' : 'SEM_1';
 }
 /* Finds every "Intersession / First Semester / Second Semester" list in an IPS sheet, with its year */
 function ipsBlocks(aoa) {
@@ -1050,8 +1009,7 @@ function courseIpsFor(prog) {
 }
 const courseList = () => Object.keys(state.courseIps || {}).map(k => k.split(/\s*[,;]\s*/)[0]).sort();
 function useCourseIps(p) {
-  if (p.ips && !p.ips.course) return;                       // a pasted IPS of their own always wins
-  if (p.ipsAoa) return;
+  if (p.ips && !p.ips.course) return;                       // an IPS of their own always wins
   const c = courseIpsFor(p.prog), blocks = c ? ipsBlocks(c.aoa) : [];
   if (!blocks.length) { if (p.ips && p.ips.course) { p.ips = null; p.ipsName = ''; } return; }
   if (!p.ips || p.ips.course !== c.course) p.ips = { blocks, pick: '', course: c.course };
@@ -1064,7 +1022,6 @@ function refreshReqs() {
     useCourseIps(p);
     const b = ipsPick(p);
     if (b) { p.ips.pick = `${b.y ? b.y + ' · ' : ''}${TERM_LABEL[b.t]}`; const ed = p.ips.edits && p.ips.edits[p.ips.pick]; p.reqs = ed ? [...ed] : reqsFromBlock(b); }
-    else if (p.ipsAoa) p.reqs = extractRange(p.ipsAoa, state.ranges[semKey()][p.side]);
   });
 }
 function ensurePeopleFor(rows) {
@@ -1310,7 +1267,6 @@ function setPick(i, p, val, msgs) {
   const r = state.rows[i];
   if (!!r.on[p] === val) return;
   r.on[p] = val;
-  if (!val && people()[p].locks.includes(keyOf(r))) people()[p].locks = people()[p].locks.filter(k => k !== keyOf(r));
   if (val) {
     removeBackup(p, i);
     state.rows.forEach((o, k) => { if (k !== i && o.on[p] && norm(o.subject) === norm(r.subject)) { setPick(k, p, false, msgs); msgs.push(`switched ${r.subject} to ${r.section}`); } });
@@ -1483,9 +1439,9 @@ function renderPeople() {
     <div class="person" style="${pv(i)}">
       <div class="person-top"><button class="avatar-btn" data-act="emoji" data-i="${i}" title="pick an emoji">${crest(i)}</button><input type="text" class="pname" data-i="${i}" maxlength="18" placeholder="${i === 0 || connected() ? 'Your name' : 'Friend\'s name'}" value="${esc(p.name)}">
         <span class="tag">${COLORS[i].hue}</span>${!connected() && nP() > 1 ? `<button class="icon-btn" data-act="remove-person" data-i="${i}" title="remove" aria-label="remove ${esc(N(i))}">✕</button>` : ''}</div>
-      <label class="field">IPS subjects this semester · one per line</label>
+      <label class="field">IPS subjects this semester · one per line${p.ips ? ' · edits here only change this semester' : ''}</label>
       <textarea class="ruled preqs" data-i="${i}" placeholder="MATH 21&#10;ENG 12&#10;IE 2&#10;Management Elective&#10;…">${esc(p.reqs.join('\n'))}</textarea>
-      ${p.ipsAoa || p.ips ? `<div class="ipsline">📜 from ${esc(p.ipsName || 'your IPS')}${p.ips && p.ips.pick ? ` · <b>${esc(p.ips.pick)}</b> (matches the open tab)` : ''}${p.ips && p.ips.edits && p.ips.edits[p.ips.pick] ? ` · edited by hand <button class="btn link" data-act="ips-reset" data-i="${i}">↺ use the IPS list</button>` : ''}${p.ipsAoa || uniq(((p.ips && p.ips.blocks) || []).map(b => b.c)).length > 1 ? ` · <select data-side="${i}"><option value="L" ${p.side === 'L' ? 'selected' : ''}>left program</option><option value="R" ${p.side === 'R' ? 'selected' : ''}>right program</option></select>` : ''}</div>` : ''}
+      ${p.ips ? `<div class="ipsline">📜 from ${esc(p.ipsName || 'your IPS')}${p.ips && p.ips.pick ? ` · <b>${esc(p.ips.pick)}</b> (matches the open tab)` : ''}${p.ips && p.ips.edits && p.ips.edits[p.ips.pick] ? ` · edited by hand <button class="btn link" data-act="ips-reset" data-i="${i}">↺ use the IPS list</button>` : ''}${p.ipsAoa || uniq(((p.ips && p.ips.blocks) || []).map(b => b.c)).length > 1 ? ` · <select data-side="${i}"><option value="L" ${p.side === 'L' ? 'selected' : ''}>left program</option><option value="R" ${p.side === 'R' ? 'selected' : ''}>right program</option></select>` : ''}</div>` : ''}
       <label class="field">🎓 Course & year${courseList().length ? ' · your course\'s IPS fills in your subjects' : ' · for classes reserved for certain courses'}</label>
       <div class="row" style="margin:0; gap:8px"><input type="text" class="pprog" data-i="${i}" list="dlProgs" maxlength="20" placeholder="e.g. AB MEC, SOSS, EC" value="${esc(p.prog || '')}" style="flex:1; min-width:120px; text-transform:uppercase">
         <select data-yr="${i}" style="width:auto">${['', '1', '2', '3', '4', '5'].map(y => `<option value="${y}" ${String(p.yr || '') === y ? 'selected' : ''}>${y ? ordinal(+y) + ' year' : `year: ${ipsYear(p) ? 'from your IPS (' + ordinal(ipsYear(p)) + ')' : 'from your IPS'}`}</option>`).join('')}</select></div>
@@ -1494,8 +1450,8 @@ function renderPeople() {
         <button class="btn small ghost" data-act="add-busy" data-i="${i}">+ busy time</button></div>
       <div class="person-actions">
         ${courseIpsFor(p.prog) && p.ips && !p.ips.course ? `<button class="btn small soft" data-act="ips-course" data-i="${i}">🎓 use the ${esc(courseIpsFor(p.prog).course)} IPS</button>` : ''}
-        <button class="btn small ${p.ips ? 'ghost' : 'soft'}" data-act="ips-paste" data-i="${i}">📋 ${p.ips && p.ips.course ? 'paste your own IPS' : p.ips ? 'paste a new IPS' : 'paste your whole IPS'}</button>
-        <label class="filelink">📜 ${p.ipsAoa || p.ips ? 'or use an IPS file' : 'or upload an IPS file'}<input type="file" data-ips="${i}" accept=".xlsx,.xls,.csv"></label>
+        <button class="btn small soft" data-act="ips-edit" data-i="${i}">✎ ${p.ips ? 'see & edit the whole IPS' : 'fill in the whole IPS'}</button>
+        <label class="filelink">📜 ${p.ips ? 'or load an IPS file' : 'or upload an IPS file'}<input type="file" data-ips="${i}" accept=".xlsx,.xls,.csv"></label>
         ${connected() ? '' : `<button class="btn link" data-act="share" data-i="${i}">🔗 share this plan</button>`}
       </div>
     </div>`).join('');
@@ -1512,7 +1468,7 @@ function renderClassList() {
 }
 /* First visit: name, course and year, then straight to Pick. Your course's IPS fills in your subjects. */
 const startIdx = () => Math.max(0, myIdx());
-const needsStart = () => { const p = people()[startIdx()]; return !!p && !p.reqs.length && !p.ips && !p.ipsAoa; };
+const needsStart = () => { const p = people()[startIdx()]; return !!p && !p.reqs.length && !p.ips; };
 function renderStart() {
   const on = needsStart() && canEditQ(startIdx()), el = $('#startCard');
   el.classList.toggle('hidden', !on); $('#panel-setup .lede').classList.toggle('hidden', on);
@@ -1530,7 +1486,7 @@ function renderStart() {
     <datalist id="dlCourses">${uniq([...cs, ...[...$('#dlProgs').options].map(o => o.value)]).map(c => `<option value="${esc(c)}">`).join('')}</datalist>
     <div class="row" style="margin-top:14px"><button class="btn" data-act="qs-go">Start picking</button><button class="btn small ghost" data-act="qs-skip">skip, I'll set things up myself</button></div>
     ${syncUrl() && !connected() ? `<p class="hint" style="margin:10px 0 0">Already have a profile? <button class="bk" data-act="sync-signin">sign in</button></p>` : ''}
-    <p class="hint" style="margin:10px 0 0">${cs.length ? `Your subjects come from your course's IPS (ready for ${esc(cs.join(', '))}).` : 'Your subjects come from your IPS.'} Minor, shifting, or a different plan? <button class="bk" data-act="ips-paste" data-i="${startIdx()}">paste your own IPS</button></p>
+    <p class="hint" style="margin:10px 0 0">${cs.length ? `Your subjects come from your course's IPS (ready for ${esc(cs.join(', '))}).` : 'Your subjects come from your IPS.'} Minor, shifting, or a different plan? <button class="bk" data-act="qs-ips">edit your IPS</button></p>
   </div>`;
 }
 async function quickStart() {
@@ -1541,22 +1497,24 @@ async function quickStart() {
   p.prog = prog; setYear(p, yr);
   refreshReqs(); save(); syncSetup(); render();
   if (p.ips && p.ips.course) { toast(`✦ ${p.reqs.length} subjects from the ${p.ips.course} IPS · ${p.ips.pick}`); return switchTab('pick'); }
-  const res = await openModal(`<h3>No ${esc(prog)} IPS here yet</h3><p>Paste your IPS once and the site fills in your subjects every semester. ${courseList().length ? `Ready-made IPSes so far: ${esc(courseList().join(', '))}.` : ''}</p>
-    <div class="row"><button class="btn small" data-choice="paste">paste my IPS</button><button class="btn small ghost" data-choice="">skip for now</button></div>`);
-  if (res && res.choice === 'paste') return pasteIps(i);
+  const res = await openModal(`<h3>No ${esc(prog)} IPS here yet</h3><p>Fill in your IPS once and the site picks out your subjects every semester. ${courseList().length ? `Ready-made IPSes so far: ${esc(courseList().join(', '))}.` : ''}</p>
+    <div class="row"><button class="btn small" data-choice="edit">fill in my IPS</button><button class="btn small ghost" data-choice="">skip for now</button></div>`);
+  if (res && res.choice === 'edit') return editIps(i, true);
   state.startSkipped = true; save(); syncSetup();   // no IPS for their course: show the rest of Setup (type subjects by hand there)
   switchTab('pick');
 }
 function syncSetup() {
   renderStart();
   renderSyncCard(); renderPeople(); renderClassList(); renderOffSynced(); renderElectiveRules();
-  $('#semPick').value = state.sem;
-  $$('[data-range]').forEach(inp => { const [s, k] = inp.dataset.range.split('.'); inp.value = state.ranges[s][k]; });
   setStatus(state.rows.length ? `✓ ${state.rows.length} sections ready${state.sheetName ? ` from "${state.sheetName}"` : ''}` : '');
   $('#urlRefresh').innerHTML = state.sheetUrl && !connected() ? `<div class="row"><button class="btn small soft" data-act="refresh-url">↻ refresh from your Google Sheet</button><span class="note-hand" style="font-size:18px">keeps everyone's picks</span></div>` : '';
   $('#dlSubjects').innerHTML = uniq(state.rows.map(r => r.subject)).map(s => `<option value="${esc(s)}">`).join('');
   $('#dlPairs').innerHTML = state.rows.map(r => `<option value="${esc(rowLabel(r))}">`).join('');
   $('#dlProgs').innerHTML = uniq(state.rows.flatMap(r => forList(r).map(e => e.prog.toUpperCase()))).filter(x => x !== 'ANY').sort().map(x => `<option value="${esc(x)}">`).join('');
+  $('#safeSub').textContent = connected() ? 'Your plan saves to the group\'s Google Sheet and follows you to any device you sign in on. Export a copy as .xlsx anytime.'
+    : 'Everything is saved in this browser only. Export to take your picks back to Google Sheets.';
+  $('#resetBtn').textContent = connected() ? 'sign out on this device' : 'start fresh';
+  $('#resetBtn').classList.toggle('danger', !connected()); $('#resetBtn').classList.toggle('ghost', connected());
   syncDayChips();
 }
 function renderHeroMini() {
@@ -1659,7 +1617,7 @@ function renderPick() {
     if (hidden) html += `<div class="sec-card" style="cursor:default; border-style:dashed; box-shadow:none"><span class="meta">${idx.length ? `+ ${hidden} more that clash` : `all ${hidden} section${hidden > 1 ? 's' : ''} clash with ${N(a) === 'You' ? 'your' : esc(N(a)) + '\'s'} other picks`}</span><button class="bk" data-act="fits-off" style="justify-self:start">show them</button></div>`;
     html += '</div></div>';
   });
-  list.innerHTML = html || emptyBox(f === 'starred' ? '☆' : '🔍', f === 'picked' ? 'Nothing picked yet' : f === 'starred' ? 'No favorites yet' : 'No matches', f === 'picked' ? 'Tap sections in "all" to add them.' : f === 'starred' ? 'Tap "☆ star" on sections you like. Auto-build ranks them higher.' : 'Try a different search.');
+  list.innerHTML = html || emptyBox(f === 'starred' ? '☆' : '🔍', f === 'picked' ? 'Nothing picked yet' : f === 'starred' ? 'No favorites yet' : 'No matches', f === 'picked' ? 'Tap sections in "all" to add them.' : f === 'starred' ? 'Tap ⋯ on a section, then ★ star it, to keep your favorites here.' : 'Try a different search.');
 }
 /* ----- who a section is for: the "For" column ("AB MEC 3; BS ME 2; some BS LEARN") vs each person's program & year ----- */
 const ordinal = n => n + (['th', 'st', 'nd', 'rd'][n % 100 > 10 && n % 100 < 14 ? 0 : n % 10] || 'th');
@@ -1811,7 +1769,7 @@ function renderWeek() {
     const r = b.r, pf = profShort(r.instructor, wd >= 0), names = b.who.map(n => L[n].label).join(' + ');
     const dots = b.who.length > 1 ? `<span class="tog">${b.who.map(n => `<i style="${pv(L[n].color)}">${esc(dsel.length ? String(n + 1) : (people()[L[n].p].emoji || N(L[n].p)[0].toUpperCase()))}</i>`).join('')}</span>` : '';
     return `<div class="blk${b.clash ? ' clash' : ''}${b.span < b.n ? ' narrow' : ''}" style="${st}" data-act="goto" data-i="${b.i}" data-p="${L[b.who[0]].p}" role="button" tabindex="0"
-      aria-label="${esc(`${names}: ${rowLabel(r)}, ${DAY_NAMES[b.d]} ${fmtRange(b.s, b.e)}${r.room ? ', ' + r.room : ''}${r.instructor ? ', ' + r.instructor : ''}${b.clash ? ', clashes' : ''}`)}" title=""${esc(`${names} · ${rowLabel(r)} · ${fmtRange(b.s, b.e)}${r.room ? ' · ' + r.room : ''}${r.instructor ? ' · ' + r.instructor : ''}`)}">${dots}${esc(r.subject)} ${esc(r.section)}${r.room ? `<br><span class="s">${esc(r.room)}</span>` : ''}${pf ? `<br><span class="s pf">${esc(pf)}</span>` : ''}</div>`;
+      aria-label="${esc(`${names}: ${rowLabel(r)}, ${DAY_NAMES[b.d]} ${fmtRange(b.s, b.e)}${r.room ? ', ' + r.room : ''}${r.instructor ? ', ' + r.instructor : ''}${b.clash ? ', clashes' : ''}`)}" title="${esc(`${names} · ${rowLabel(r)} · ${fmtRange(b.s, b.e)}${r.room ? ' · ' + r.room : ''}${r.instructor ? ' · ' + r.instructor : ''}`)}">${dots}${esc(r.subject)} ${esc(r.section)}${r.room ? `<br><span class="s">${esc(r.room)}</span>` : ''}${pf ? `<br><span class="s pf">${esc(pf)}</span>` : ''}</div>`;
   }));
   if (!dsel.length && shown.length > 1) freeTogether(shown, E).forEach((g, d) => g.forEach(([s0, e0]) => cols[d].unshift(`<div class="freeblk" style="top:${(s0 - S * 60) / 60 * H}px; height:${(e0 - s0) / 60 * H}px" title="everyone shown is free ${fmtRange(s0, e0)}"><span>free together</span></div>`)));
   if (slot && days.includes(slot.day)) cols[slot.day].push(`<div class="slotmark" style="top:${(slot.min - S * 60) / 60 * H}px"></div>`);
@@ -2089,7 +2047,7 @@ async function sharePlan(i) {
   let copied = false;
   try { await navigator.clipboard.writeText(link); copied = true; } catch (e) {}
   const svg = qrSvg(link);
-  const res = await openModal(`<h3>Share ${N(i) === 'You' ? 'your' : esc(N(i)) + '\'s'} plan</h3><p>${copied ? '<b>Link copied!</b> ' : ''}Send it to a friend${svg ? ', or let them scan the QR code' : ''}. Opening it adds this plan to their Compare tab.</p>
+  const res = await openModal(`<h3>Share ${N(i) === 'You' ? 'your' : esc(N(i)) + '\'s'} plan</h3><p>${copied ? '<b>Link copied!</b> ' : ''}Send it to a friend${svg ? ', or let them scan the QR code' : ''}. Opening it adds this plan to their Enlistment Hub, next to theirs.</p>
     ${svg ? `<div class="qr">${svg}</div>` : ''}
     <textarea readonly style="min-height:70px; margin-top:10px; font-size:12px" onclick="this.select()">${esc(link)}</textarea>
     <div class="row">${navigator.share ? '<button class="btn small" data-choice="native">share…</button>' : ''}<button class="btn small ghost" data-choice="">done</button></div>`);
@@ -2112,7 +2070,7 @@ async function importCode(raw) {
   const snap = snapshot(), slotIdx = res.choice === 'new' ? nP() : +res.choice;
   if (res.choice === 'new') state.people.push(newPerson());
   state.rows.forEach(r => r.on[slotIdx] = false);
-  Object.assign(state.people[slotIdx], { name: data.n || '', emoji: data.e || '', reqs: data.q || [], ipsAoa: null, ipsName: '', backups: data.b || {}, busy: data.u || [], stars: data.f || [], drafts: [] });
+  Object.assign(state.people[slotIdx], { name: data.n || '', emoji: data.e || '', reqs: data.q || [], ips: null, ipsName: '', backups: data.b || {}, busy: data.u || [], stars: data.f || [], drafts: [] });
   let added = 0;
   const ensureRow = arr => {
     const [subject, section, days, time, room, instructor, pair] = arr;
@@ -2211,7 +2169,7 @@ function loadScheduleSheet(name) {
   const rows = parseScheduleSheet(sheetToAoa(schedWb.Sheets[name]));
   if (!rows.length) { setStatus(`No sections found in "${name}". Check that it has a "Subject" column.`, true); return 0; }
   carryPicks(state.rows, rows);
-  state.sheetName = name; state.rows = rows; ensurePeopleFor(rows);
+  state.sheetName = name; state.rows = rows; SY().offHash = ''; ensurePeopleFor(rows);
   refreshReqs(); save(); syncSetup(); render();
   return rows.length;
 }
@@ -2225,7 +2183,7 @@ function loadWorkbook(wb, sourceName, snap) {
   if (Object.keys(cIps).length) state.courseIps = cIps;
   if (ipsName) {
     const aoa = sheetToAoa(wb.Sheets[ipsName]), blocks = ipsBlocks(aoa);
-    ['L', 'R'].forEach((side, i) => { const p = state.people[i]; if (p && (!p.reqs.length || p.ipsAoa || p.ips)) Object.assign(p, { ipsAoa: blocks.length ? null : aoa, ips: blocks.length ? { blocks, pick: '' } : null, ipsName: sourceName, side: p.ipsAoa || p.ips ? p.side : side }); });
+    ['L', 'R'].forEach((side, i) => { const p = state.people[i]; if (p && blocks.length && (!p.reqs.length || p.ips)) Object.assign(p, { ips: { blocks, pick: '' }, ipsName: sourceName, side: p.ips ? p.side : side }); });
   }
   const candidates = wb.SheetNames.filter(n => n !== ipsName && n !== elName && !/^EH /.test(n) && norm(n) !== 'start here');
   if (!candidates.length) return setStatus('No schedule sheet in that file.', true);
@@ -2287,6 +2245,7 @@ async function doPaste(replace) {
   const snap = snapshot();
   if (replace) { carryPicks(state.rows, rows); state.rows = rows; state.sheetName = ''; state.sheetUrl = ''; }
   else state.rows = state.rows.concat(rows);
+  SY().offHash = '';
   ensurePeopleFor(rows);
   $('#pasteBox').value = '';
   save(); syncSetup(); render();
@@ -2341,11 +2300,95 @@ async function pasteIps(i) {
   const blocks = ipsBlocks(parseIpsText(res.ips));
   if (!blocks.length) return toast('Couldn\'t find any semesters. Make sure the headings like "First Semester" are included.');
   const snap = snapshot();
-  Object.assign(p, { ipsAoa: null, ips: { blocks, pick: '' }, ipsName: 'your pasted IPS', side: 'L' });
+  Object.assign(p, { ips: { blocks, pick: '' }, ipsName: 'your pasted IPS', side: 'L' });
   refreshReqs(); save(); syncSetup(); render();
   if (connected() && !SY().tabPicked) loadOfferings('').then(() => { refreshReqs(); save(); syncSetup(); render(); }).catch(() => {});   // open the semester that matches
   const years = uniq(blocks.map(b => b.y).filter(Boolean));
   undoable(`IPS saved ✦ ${blocks.length} semesters${years.length ? ' across ' + years.length + ' years' : ''}${p.ips.pick ? ' · showing ' + p.ips.pick : ''}`, snap);
+}
+
+/* ----- the whole-IPS editor: every year and semester, filled in from your course's IPS, editable ----- */
+const TERMS = ['s1', 's2', 'int'];
+const YEAR_NAMES = ['First Year', 'Second Year', 'Third Year', 'Fourth Year', 'Fifth Year'];
+const termLabel = (y, t) => `${y ? y + ' · ' : ''}${TERM_LABEL[t]}`;
+/* someone's IPS as { years: ['First Year', …], lines: { 'First Year|s1': ['ECON 110', …] } }, with this-semester hand edits included */
+function ipsForEditor(p) {
+  let blocks = [], from = '';
+  if (p.ips && (p.ips.blocks || []).length) {
+    const cols = uniq(p.ips.blocks.map(b => b.c)).sort((a, b) => a - b), col = p.side === 'R' ? cols[cols.length - 1] : cols[0];
+    blocks = p.ips.blocks.filter(b => b.c === col || cols.length === 1);
+    from = p.ips.course ? `the ${p.ips.course} IPS` : (p.ipsName || 'your IPS');
+  } else {
+    const c = courseIpsFor(p.prog);
+    if (c) { blocks = ipsBlocks(c.aoa); from = `the ${c.course} IPS`; }
+  }
+  const years = uniq(blocks.map(b => b.y || ''));
+  YEAR_NAMES.slice(0, 4).forEach(y => { if (!years.some(x => norm(x) === norm(y))) years.push(y); });
+  years.sort((a, b) => (YEARW[norm(a).split(' ')[0]] || 9) - (YEARW[norm(b).split(' ')[0]] || 9));
+  const lines = {};
+  blocks.forEach(b => {
+    const ed = p.ips && p.ips.edits && p.ips.edits[termLabel(b.y, b.t)];
+    const k = `${b.y || ''}|${b.t}`;
+    lines[k] = [...(lines[k] || []), ...(ed && !lines[k] ? ed : reqsFromBlock(b))];
+  });
+  return { years, lines, from };
+}
+/* lines back into IPS lists: "FAA 123 · Management Elective" keeps both halves so the elective still counts */
+function blocksFromEditor(years, get) {
+  const out = [];
+  years.forEach(y => TERMS.forEach(t => {
+    const ls = lines(get(y, t) || ''); if (!ls.length) return;
+    const s = [], d = [];
+    ls.forEach(x => { const k = x.indexOf(' · '); s.push(k > 0 ? x.slice(0, k).trim() : x); d.push(k > 0 ? x.slice(k + 3).trim() : ''); });
+    out.push({ y, t, c: 0, s, d });
+  }));
+  return out;
+}
+const blocksKey = blocks => JSON.stringify(blocks.map(b => [YEARW[norm(b.y).split(' ')[0]] || 9, TERMS.indexOf(b.t), reqsFromBlock(b).map(norm)]).sort((a, b) => a[0] - b[0] || a[1] - b[1]));
+async function editIps(i, fromStart) {
+  const p = state.people[i];
+  const ed = ipsForEditor(p), course = courseIpsFor(p.prog);
+  const now = p.ips && p.ips.pick ? p.ips.pick : '';
+  const nowYear = (ed.years.find(y => norm(now).startsWith(norm(y))) || ed.years.find(y => YEARW[norm(y).split(' ')[0]] === yearOf(i))) || ed.years.find(y => TERMS.some(t => (ed.lines[`${y}|${t}`] || []).length)) || ed.years[0];
+  const count = y => TERMS.reduce((n, t) => n + (ed.lines[`${y}|${t}`] || []).length, 0);
+  const short = y => { const n = YEARW[norm(y).split(' ')[0]]; return n ? ordinal(n) + ' year' : y || 'IPS'; };
+  const box = (y, t, yi) => {
+    const isNow = norm(termLabel(y, t)) === norm(now);
+    return `<div><label class="field${isNow ? ' now' : ''}">${TERM_LABEL[t]}${isNow ? ' · this semester ✦' : ''}</label>
+      <textarea class="ruled" data-field="t:${yi}:${t}" spellcheck="false" placeholder="${t === 'int' ? 'often empty' : 'ECON 110&#10;MATH 30.13&#10;…'}">${esc((ed.lines[`${y}|${t}`] || []).join('\n'))}</textarea></div>`;
+  };
+  const own = p.ips && !p.ips.course;
+  const res = await openModal(`<h3>${N(i) === 'You' || canEditQ(i) && connected() ? 'Your' : esc(N(i)) + '\'s'} whole IPS</h3>
+    <p>${ed.from ? `Filled in from <b>${esc(ed.from)}</b>. ` : 'Type in each semester\'s subjects. '}One subject per line. Add a minor, swap a subject, or move something to another semester; the site picks out the right semester for each tab. Electives like <b>MGT Elective</b> stay flexible.</p>
+    <div class="ipsyrs seg" role="group" aria-label="Year">${ed.years.map((y, yi) => `<button data-mtab="y${yi}" aria-pressed="${y === nowYear}">${esc(short(y))}<span class="n">${count(y) || ''}</span></button>`).join('')}</div>
+    ${ed.years.map((y, yi) => `<div data-mpane="y${yi}" ${y === nowYear ? '' : 'hidden'}><div class="ipsterms">${TERMS.map(t => box(y, t, yi)).join('')}</div></div>`).join('')}
+    ${own && course ? `<p class="hint">This is your own copy. <b>↺ back to the ${esc(course.course)} IPS</b> switches to the course's version again.</p>`
+      : course ? `<p class="hint">Change anything and this becomes your own copy, so later updates to the ${esc(course.course)} IPS in the sheet won't reach it. You can switch back anytime.</p>` : ''}
+    <div class="row"><button class="btn small" data-choice="ok">save IPS</button><button class="btn small ghost" data-choice="">cancel</button>
+      ${own && course ? `<button class="btn small ghost" data-choice="course">↺ back to the ${esc(course.course)} IPS</button>` : ''}
+      <button class="btn small link" data-choice="paste">📋 paste one instead</button></div>`, { wide: true });
+  if (!res || !res.choice) return;
+  if (res.choice === 'paste') return pasteIps(i);
+  const snap = snapshot();
+  if (res.choice === 'course') {
+    Object.assign(p, { ips: null, ipsName: '' }); refreshReqs(); save(); syncSetup(); render();
+    return undoable(`using the ${course.course} IPS again`, snap);
+  }
+  const blocks = blocksFromEditor(ed.years, (y, t) => res[`t:${ed.years.indexOf(y)}:${t}`]);
+  if (!blocks.length) return toast('Your IPS is empty. Add at least one subject.');
+  const cBlocks = course ? ipsBlocks(course.aoa) : [];
+  if (course && blocksKey(blocks) === blocksKey(cBlocks)) {   // nothing changed from the course's IPS: stay linked to it, so sheet updates reach you
+    Object.assign(p, { ips: null, ipsName: '' });
+  } else {
+    const anchor = p.ips && p.ips.anchor;
+    p.ips = { blocks, pick: '', ...(anchor ? { anchor } : {}) };
+    p.ipsName = course || (ed.from && ed.from !== 'your IPS') ? 'your edited IPS' : 'your IPS';
+    p.side = 'L';
+  }
+  refreshReqs(); save(); syncSetup(); render();
+  if (connected() && !SY().tabPicked) loadOfferings('').then(() => { refreshReqs(); save(); syncSetup(); render(); }).catch(() => {});   // open the semester that matches
+  undoable(`IPS saved ✦${p.ips && p.ips.pick ? ' showing ' + p.ips.pick : ''}`, snap);
+  if (fromStart) { state.startSkipped = true; save(); syncSetup(); switchTab('pick'); }
 }
 
 $('#peopleList').addEventListener('input', e => {
@@ -2355,7 +2398,7 @@ $('#peopleList').addEventListener('input', e => {
   else if (e.target.matches('.preqs')) {
     const p = state.people[i]; p.reqs = lines(e.target.value);
     if (p.ips && p.ips.pick) { p.ips.edits = p.ips.edits || {}; p.ips.edits[p.ips.pick] = [...p.reqs]; }   // a hand edit for this term only; the rest of the IPS stays
-    else { p.ipsAoa = null; p.ips = null; }
+    else p.ips = null;
     save();
   }
 });
@@ -2368,14 +2411,13 @@ $('#peopleList').addEventListener('change', async e => {
     try {
       const wb = await readFile(file), name = findIpsSheet(wb) || wb.SheetNames[0], p = state.people[i];
       const aoa = sheetToAoa(wb.Sheets[name]), blocks = ipsBlocks(aoa);
-      Object.assign(p, { ipsAoa: blocks.length ? null : aoa, ips: blocks.length ? { blocks, pick: '' } : null, ipsName: file.name, side: p.side || 'L' });
+      if (!blocks.length) return toast('Couldn\'t find any semesters in that file. It needs headings like "First Semester" above each list.');
+      Object.assign(p, { ips: { blocks, pick: '' }, ipsName: file.name, side: p.side || 'L' });
       refreshReqs(); save(); syncSetup(); render();
       toast(p.reqs.length ? `${p.reqs.length} subjects imported for ${N(i)}${p.ips && p.ips.pick ? ' · ' + p.ips.pick : ''}` : 'Couldn\'t find subjects in that file. Try the other program or check the cell ranges.');
     } catch (err) { toast('Couldn\'t read that file: ' + err.message); }
   }
 });
-$('#semPick').addEventListener('change', e => { state.sem = e.target.value; refreshReqs(); save(); syncSetup(); render(); });
-$$('[data-range]').forEach(inp => inp.addEventListener('change', () => { const [s, k] = inp.dataset.range.split('.'); state.ranges[s][k] = inp.value.trim().toUpperCase(); refreshReqs(); save(); syncSetup(); render(); }));
 $('#classSearch').addEventListener('input', renderClassList);
 $('#sheetPick').addEventListener('change', e => { const snap = snapshot(), n = loadScheduleSheet(e.target.value); if (n) undoable(`${n} sections loaded from "${e.target.value}"`, snap); });
 $('#sheetUrl').addEventListener('keydown', e => { if (e.key === 'Enter') loadFromUrl(e.target.value); });
@@ -2581,7 +2623,7 @@ function aisisCopier() {
 })();
 
 /* ======================= Google Sheets sync: profiles & rooms ======================= */
-const SYNC_URL = 'https://script.google.com/macros/s/AKfycbweXHJ-y06Yb0uhrqh_E6lN3Ggm3cH6CJhfkUXvC4m-rfNJ9FCWSA7XT5h5OaIQi4o/exec'; // your Apps Script web app URL (ends in /exec)
+const SYNC_URL = 'https://script.google.com/macros/s/AKfycbzXYJfO5Lea8srNmBJxo2YgoyJOmG9C10B8qwAGVWsEIqVqqGumhlZW7gDZLFzYFGPF/exec'; // your Apps Script web app URL (ends in /exec)
 const SY = () => state.sync;
 const syncUrl = () => SYNC_URL || SY().url || '';
 const connected = () => !!(syncUrl() && SY().me && SY().mine);
@@ -2591,8 +2633,8 @@ const canEditQ = p => !connected() || p === myIdx();
 function canEdit(p) { if (canEditQ(p)) return true; toast(`Only ${N(p)} can change ${N(p)}'s plan 🔒`); return false; }
 const fmtCode = c => { c = String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); return c.length === 8 ? c.slice(0, 4) + '-' + c.slice(4) : c.length === 10 ? c.slice(0, 5) + '-' + c.slice(5) : c; };
 const authBody = () => ({ id: SY().me.id, token: SY().me.token });
-const normMine = m => ({ name: m.name || '', emoji: m.emoji || '', reqs: m.reqs || [], picks: m.picks || [], tabPicks: m.tabPicks || null, byTab: m.byTab || null, backups: m.backups || {}, stars: m.stars || [], busy: m.busy || [], slots: m.slots || {}, locks: m.locks || [], prog: m.prog || '', yr: m.yr || '', yrSy: m.yrSy ?? null, drafts: m.drafts || [], notes: m.notes || {}, profs: m.profs || {}, ips: m.ips || null, side: m.side || 'L', ipsName: m.ipsName || '' });
-const pubOf = m => ({ name: m.name, emoji: m.emoji, reqs: m.reqs, picks: m.picks, tabPicks: m.tabPicks, byTab: m.byTab, backups: m.backups, stars: m.stars, busy: m.busy, slots: m.slots, locks: m.locks, prog: m.prog, yr: m.yr, yrSy: m.yrSy });
+const normMine = m => ({ name: m.name || '', emoji: m.emoji || '', reqs: m.reqs || [], picks: m.picks || [], tabPicks: m.tabPicks || null, byTab: m.byTab || null, backups: m.backups || {}, stars: m.stars || [], busy: m.busy || [], slots: m.slots || {}, prog: m.prog || '', yr: m.yr || '', yrSy: m.yrSy ?? null, drafts: m.drafts || [], notes: m.notes || {}, profs: m.profs || {}, ips: m.ips || null, side: m.side || 'L', ipsName: m.ipsName || '' });
+const pubOf = m => ({ name: m.name, emoji: m.emoji, reqs: m.reqs, picks: m.picks, tabPicks: m.tabPicks, byTab: m.byTab, backups: m.backups, stars: m.stars, busy: m.busy, slots: m.slots, prog: m.prog, yr: m.yr, yrSy: m.yrSy });
 const privOf = m => ({ drafts: m.drafts, notes: m.notes, profs: m.profs, ips: m.ips, side: m.side, ipsName: m.ipsName });
 const pending = () => connected() && JSON.stringify(SY().mine) !== SY().lastPushed;
 const roomV = {};   // the room version each poll last saw: unchanged rooms answer "same" without the sheet being read
@@ -2635,16 +2677,15 @@ function migratePicks(m) {
     (m.picks || []).forEach(k => { const t = guessTab(k, m); (out[t] = out[t] || []).push(k); });
     m.tabPicks = out; changed = true;
   }
-  if (!m.byTab) {                                 // stars, Plan B/C backups and locks also belong to a tab now
-    const out = {}, at = t => (out[t] = out[t] || { stars: [], backups: {}, locks: [] });
+  if (!m.byTab) {                                 // stars and Plan B/C backups also belong to a tab now
+    const out = {}, at = t => (out[t] = out[t] || { stars: [], backups: {} });
     (m.stars || []).forEach(k => at(guessTab(k, m)).stars.push(k));
-    (m.locks || []).forEach(k => at(guessTab(k, m)).locks.push(k));
     Object.entries(m.backups || {}).forEach(([subj, keys]) => (keys || []).forEach(k => { const b = at(guessTab(k, m)).backups; (b[subj] = b[subj] || []).push(k); }));
     m.byTab = out; changed = true;
   }
   return changed;
 }
-const tabExtras = (m, tab) => m.byTab ? (m.byTab[tab] || { stars: [], backups: {}, locks: [] }) : { stars: m.stars || [], backups: m.backups || {}, locks: m.locks || [] };
+const tabExtras = (m, tab) => m.byTab ? (m.byTab[tab] || { stars: [], backups: {} }) : { stars: m.stars || [], backups: m.backups || {} };
 
 /* the view (state.people + row ticks) is rebuilt from your profile and your room's members */
 /* A friend's plan comes from the sheet, so anyone could have saved anything there with a script.
@@ -2657,13 +2698,13 @@ const okBusy = b => { b = okObj(b); const days = Array.isArray(b.days) ? b.days.
   return days.length && Number.isFinite(b.s) && Number.isFinite(b.e) && b.s < b.e ? { label: okStr(b.label).slice(0, 40) || 'busy', days, s: b.s, e: b.e } : null; };
 function cleanPub(m) {
   m = okObj(m);
-  const extras = x => ({ stars: okStrs(okObj(x).stars), backups: okDict(okObj(x).backups, okStrs), locks: okStrs(okObj(x).locks) });
+  const extras = x => ({ stars: okStrs(okObj(x).stars), backups: okDict(okObj(x).backups, okStrs) });
   return { name: okStr(m.name), emoji: okStr(m.emoji), reqs: okStrs(m.reqs), picks: okStrs(m.picks),
     tabPicks: m.tabPicks == null ? null : okDict(m.tabPicks, okStrs), byTab: m.byTab == null ? null : okDict(m.byTab, extras),
     backups: okDict(m.backups, okStrs), stars: okStrs(m.stars), busy: (Array.isArray(m.busy) ? m.busy : []).map(okBusy).filter(Boolean),
-    slots: okDict(m.slots, x => typeof x === 'string' ? x : undefined), locks: okStrs(m.locks), prog: okStr(m.prog), yr: okStr(m.yr), yrSy: Number.isFinite(m.yrSy) ? m.yrSy : null };
+    slots: okDict(m.slots, x => typeof x === 'string' ? x : undefined), prog: okStr(m.prog), yr: okStr(m.yr), yrSy: Number.isFinite(m.yrSy) ? m.yrSy : null };
 }
-function personOf(m, tab) { m = m || {}; const x = tabExtras(m, tab); return Object.assign(newPerson(), { name: m.name || '', emoji: m.emoji || '', reqs: m.reqs || [], backups: clone(x.backups || {}), stars: [...(x.stars || [])], busy: m.busy || [], slots: m.slots || {}, locks: [...(x.locks || [])], prog: m.prog || '', yr: m.yr || '', yrSy: m.yrSy ?? null, drafts: m.drafts || [], ips: m.ips ? clone(m.ips) : null, side: m.side || 'L', ipsName: m.ipsName || '' }); }
+function personOf(m, tab) { m = m || {}; const x = tabExtras(m, tab); return Object.assign(newPerson(), { name: m.name || '', emoji: m.emoji || '', reqs: m.reqs || [], backups: clone(x.backups || {}), stars: [...(x.stars || [])], busy: m.busy || [], slots: m.slots || {}, prog: m.prog || '', yr: m.yr || '', yrSy: m.yrSy ?? null, drafts: m.drafts || [], ips: m.ips ? clone(m.ips) : null, side: m.side || 'L', ipsName: m.ipsName || '' }); }
 function materialize() {
   if (!connected()) return;
   const sy = SY(), rc = curRoom();
@@ -2691,15 +2732,15 @@ function extractMine() {
   }
   let byTab = null;
   if (sy.mine.byTab && sy.tab) {
-    byTab = { ...sy.mine.byTab, [sy.tab]: { stars: p.stars, backups: p.backups, locks: p.locks } };
-    const e = byTab[sy.tab]; if (!e.stars.length && !e.locks.length && !Object.values(e.backups).some(l => l.length)) delete byTab[sy.tab];
+    byTab = { ...sy.mine.byTab, [sy.tab]: { stars: p.stars, backups: p.backups } };
+    const e = byTab[sy.tab]; if (!e.stars.length && !Object.values(e.backups).some(l => l.length)) delete byTab[sy.tab];
   }
   sy.mine = normMine({ name: p.name, emoji: p.emoji, reqs: p.reqs, picks, tabPicks, byTab,
-                       backups: p.backups, stars: p.stars, busy: p.busy, slots: p.slots, locks: p.locks, prog: p.prog, yr: p.yr, yrSy: p.yrSy, drafts: p.drafts, notes: state.notes, profs: state.profs, ips: p.ips, side: p.side, ipsName: p.ipsName });
+                       backups: p.backups, stars: p.stars, busy: p.busy, slots: p.slots, prog: p.prog, yr: p.yr, yrSy: p.yrSy, drafts: p.drafts, notes: state.notes, profs: state.profs, ips: p.ips, side: p.side, ipsName: p.ipsName });
 }
 function mineFromLocal() {
   const p = state.people[0] || newPerson();
-  return normMine({ name: p.name, emoji: p.emoji, reqs: p.reqs, picks: state.rows.filter(r => r.on[0]).map(keyOf), backups: p.backups, stars: p.stars, busy: p.busy, slots: p.slots, locks: p.locks, prog: p.prog, yr: p.yr, yrSy: p.yrSy, drafts: p.drafts, notes: state.notes, profs: state.profs, ips: p.ips, side: p.side, ipsName: p.ipsName });
+  return normMine({ name: p.name, emoji: p.emoji, reqs: p.reqs, picks: state.rows.filter(r => r.on[0]).map(keyOf), backups: p.backups, stars: p.stars, busy: p.busy, slots: p.slots, prog: p.prog, yr: p.yr, yrSy: p.yrSy, drafts: p.drafts, notes: state.notes, profs: state.profs, ips: p.ips, side: p.side, ipsName: p.ipsName });
 }
 function currentSig() {
   const sy = SY(), rc = curRoom(), me = sy.me ? sy.me.id : '';
@@ -2821,12 +2862,17 @@ function bestTab(out) {
 }
 async function loadOfferings(tab, quiet) {
   const sy = SY();
-  let out = await api('offerings', { sheet: tab || sy.tab || '' });
-  if (!tab && !sy.tabPicked && out.subjects) { const best = bestTab(out); if (best !== out.sheet) out = await api('offerings', { sheet: best }); }
+  // "since": the fingerprint of the class list we already have, so an unchanged tab isn't downloaded again
+  const since = () => state.rows.length ? sy.offHash || '' : '';
+  let out = await api('offerings', { sheet: tab || sy.tab || '', since: since() });
+  if (!tab && !sy.tabPicked && out.subjects) { const best = bestTab(out); if (best !== out.sheet) out = await api('offerings', { sheet: best, since: since() }); }
   sy.tabs = out.tabs; sy.tab = out.sheet; sy.offAt = Date.now();
   if (out.subjects) sy.tabSubs = out.subjects;
   if (sy.mine && migratePicks(sy.mine)) { persist(); lastSig = ''; schedulePush(); }
-  const rows = parseScheduleSheet(out.aoa).map(r => ({ ...r, on: [false, false, false, false] }));
+  const same = !!out.same && state.sheetName === out.sheet && state.rows.length > 0;
+  if (!out.same) sy.offHash = out.h || '';
+  else if (!same) { sy.offHash = ''; return loadOfferings(out.sheet, quiet); }   // shouldn't happen, but never keep the wrong tab's classes
+  const rows = same ? state.rows : parseScheduleSheet(out.aoa).map(r => ({ ...r, on: [false, false, false, false] }));
   if (out.courseIps) state.courseIps = out.courseIps;
   const sig = JSON.stringify([out.sheet, rows.map(rowArr), out.electives || null, out.courseIps || null]);   // the tab name counts too: two empty tabs are still different semesters
   if (sig !== sy.offSig) { sy.offSig = sig; sy.offVer++; state.rows = rows; state.sheetName = out.sheet; state.electives = out.electives || null; }
@@ -3115,11 +3161,11 @@ async function showTips(roomName) {
   state.tipsSeen = true; persist();
   const step = (n, t, d) => `<div style="display:grid; grid-template-columns:auto 1fr; gap:12px; align-items:start; margin-top:14px"><span class="crest" style="${pv(myIdx() >= 0 ? myIdx() : 0)}">${n}</span><div><b>${t}</b><br><span style="color:var(--muted); font-size:14px; line-height:1.4">${d}</span></div></div>`;
   const res = await openModal(`<h3>${roomName ? `Welcome to "${esc(roomName)}" ✦` : 'How it works ✦'}</h3><p>Three quick steps:</p>
-    ${step(1, '🎓 Your course and year', 'Pick them in Setup and your subjects fill in from your course\'s IPS. Or paste your own IPS if yours is different.')}
+    ${step(1, '🎓 Your course and year', 'Pick them in Setup and your subjects fill in from your course\'s IPS. Yours is different? Edit it there.')}
     ${step(2, '✎ Pick your sections', 'Tap a section to add it. Clashes show before you commit, and "only what fits" hides the ones that won\'t work.')}
     ${step(3, '👯 See who you\'re with', 'Week shows everyone side by side, when you\'re all free, what friends just picked, and 💌 requests to join their sections.')}
     <div class="row" style="margin-top:18px"><button class="btn small" data-choice="ips">set up my subjects</button><button class="btn small ghost" data-choice="">got it</button></div>`);
-  if (res && res.choice === 'ips') { switchTab('setup'); setTimeout(() => { const f = $('#qsProg'); if (f && !$('#startCard').classList.contains('hidden')) f.focus(); else pasteIps(Math.max(0, myIdx())); }, 250); }
+  if (res && res.choice === 'ips') { switchTab('setup'); setTimeout(() => { const f = $('#qsProg'); if (f && !$('#startCard').classList.contains('hidden')) f.focus(); else editIps(Math.max(0, myIdx())); }, 250); }
 }
 
 /* ----- room extras: activity, nudges, room notes, reactions ----- */
@@ -3412,7 +3458,7 @@ document.addEventListener('click', async e => {
     case 'more': return cardMenu(i);
     case 'ips-course': {
       const p = state.people[i], snap = snapshot();
-      Object.assign(p, { ips: null, ipsAoa: null, ipsName: '' }); refreshReqs(); save(); syncSetup(); render();
+      Object.assign(p, { ips: null, ipsName: '' }); refreshReqs(); save(); syncSetup(); render();
       return undoable(`using the ${courseIpsFor(p.prog).course} IPS`, snap);
     }
     case 'add-person': return addPerson(false);
@@ -3530,6 +3576,14 @@ document.addEventListener('click', async e => {
     case 'show-straight': state.hideStraight = false; save(); render(); return toast('"classes straight" reminders are back');
     case 'hide-straight': state.hideStraight = true; save(); render(); return toast('hidden · you can turn it back on under the week preview', { label: 'undo', fn: () => { state.hideStraight = false; save(); render(); } });
     case 'ips-paste': return canEdit(i) && pasteIps(i);
+    case 'ips-edit': return canEdit(i) && editIps(i);
+    case 'qs-ips': {   // from "Get started": keep what they typed so far, then open the IPS editor
+      const k = startIdx(), p = state.people[k], name = ($('#qsName') || {}).value, prog = ($('#qsProg') || {}).value, yr = ($('#qsYr') || {}).value;
+      if (name && name.trim()) p.name = name.trim();
+      if (prog && prog.trim()) p.prog = prog.trim().toUpperCase().replace(/\s+/g, ' ');
+      if (yr) setYear(p, yr);
+      save(); return editIps(k, true);
+    }
     case 'ips-reset': {
       const p = state.people[i]; if (!canEdit(i) || !p.ips || !p.ips.edits) return;
       delete p.ips.edits[p.ips.pick]; refreshReqs(); save(); syncSetup(); render(); return toast(`back to your IPS list for ${p.ips.pick}`);
