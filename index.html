@@ -383,7 +383,9 @@
          background: var(--cs); color: var(--cd); border: 1.5px solid var(--c); transition: transform .12s; }
   .blk:hover { transform: scale(1.03); z-index: 5; }
   .blk.clash { box-shadow: 0 0 0 2px var(--bad); }
-  .blk.cmp { border-color: var(--pc); border-width: 2px; border-left-width: 5px; }   /* comparing: the outline says whose */
+  .blk.cmp { border-color: var(--pc); border-width: 2px; }   /* comparing: the outline says whose */
+  .tl.multi .tl-col { border-right: 1.5px solid var(--line); }   /* comparing: clear lines between days */
+  .lanediv { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--line-2); pointer-events: none; }
   :root[data-theme="dark"] .blk:not(.busy), :root[data-theme="dark"] .mini .b:not(.busy):not(.ghost), :root[data-theme="dark"] .ag:not(.busy):not(.free) {
     background: color-mix(in srgb, var(--c) 30%, var(--surface)); color: color-mix(in srgb, var(--c) 22%, #fff); }
   .blk.busy { pointer-events: none; }
@@ -2034,6 +2036,7 @@ function renderWeek() {
         aria-label="${esc(`${names}: ${rowLabel(r)}, ${DAY_NAMES[b.d]} ${fmtRange(b.s, b.e)}${r.room ? ', ' + r.room : ''}${r.instructor ? ', ' + r.instructor : ''}${b.clash ? ', clashes' : ''}`)}" title="${esc(`${names} · ${rowLabel(r)} · ${fmtRange(b.s, b.e)}${r.room ? ' · ' + r.room : ''}${r.instructor ? ' · ' + r.instructor : ''}`)}">${who(b)}${esc(r.subject)} ${esc(r.section)}${r.room ? `<br><span class="s">${esc(r.room)}</span>` : ''}${pf ? `<br><span class="s pf">${esc(pf)}</span>` : ''}</div>`;
     }));
     free.forEach((g, d) => g.forEach(([s0, e0]) => cols[d].unshift(`<div class="freeblk" style="top:${(s0 - S * 60) / 60 * H}px; height:${(e0 - s0) / 60 * H}px" title="everyone shown is free ${fmtRange(s0, e0)}"><span>free together</span></div>`)));
+    if (multi && !over) days.forEach(d => { for (let n = 1; n < L.length; n++) cols[d].unshift(`<div class="lanediv" style="left:${2 + n * 96 / L.length - .75}%"></div>`); });   // a faint line between people's lanes
     if (slot && days.includes(slot.day)) cols[slot.day].push(`<div class="slotmark" style="top:${(slot.min - S * 60) / 60 * H}px"></div>`);
     const m0 = nowMin();
     if (td < 6 && days.includes(td) && m0 > S * 60 && m0 < E * 60) cols[td].push(`<div class="nowline" style="top:${(m0 - S * 60) / 60 * H}px" title="now"></div>`);
@@ -2041,7 +2044,7 @@ function renderWeek() {
     const laneTags = multi && !over ? `<div class="lanetags">${L.map((ln, n) => `<span><i style="${pv(ln.color)}" title="${esc(ln.label)}">${esc(tag(n))}</i>${wd >= 0 ? ` ${esc(ln.label)}` : ''}</span>`).join('')}</div>` : '';
     let axis = '';
     for (let h = S + 1; h < E; h++) axis += `<span style="top:${(h - S) * H}px">${((h + 11) % 12) + 1}${h >= 12 ? 'pm' : 'am'}</span>`;
-    grid.innerHTML = next + `<div class="tl ${wd >= 0 ? 'one' : ''}">
+    grid.innerHTML = next + `<div class="tl ${wd >= 0 ? 'one' : ''}${multi ? ' multi' : ''}">
       <div class="tl-head"><div style="width:50px; flex:none"></div>${days.map(d => `<div style="flex:1"${d === td ? ' class="istoday"' : ''}>${wd >= 0 ? DAY_NAMES[d] : DAY_SHORT[d]}${laneTags}</div>`).join('')}</div>
       <div class="tl-body" style="height:${(E - S) * H}px"><div class="tl-axis">${axis}</div>${days.map(d => `<div class="tl-col${d === td ? ' today' : ''}" data-act="slot" data-day="${d}">${cols[d].join('')}</div>`).join('')}</div>
     </div>`;
