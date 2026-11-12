@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Enlistment Hub</title>
 <meta name="theme-color" content="#f3f1f8">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Enlistment">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="description" content="Plan your class enlistment with friends: pick sections, catch clashes and see everyone's week.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -434,11 +441,16 @@
   #panel-setup.settled .hero h1 { font-size: clamp(28px, 4vw, 40px); margin: 0; }
   #panel-setup.settled .hero .lede, #panel-setup.settled .hero-note, #panel-setup.settled .hero-vis { display: none; }
   #panel-setup.settled > .sec { margin-top: 28px; }
-  .moreopts > summary { margin-top: 0; }
+  .moreopts > summary { margin-top: 0; color: var(--muted); font-weight: 600; }
+  .moreopts { padding: 0 4px; }
+  #offCard details > summary { color: var(--muted); font-weight: 600; font-size: 13.5px; margin-top: 10px; }
+  .offline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+  .offline .n { color: var(--muted); font-weight: 500; }
+  .offnote { font-size: 13px; color: var(--muted); margin: 6px 0 4px; }
   #panel-setup.simple > .sec, #panel-setup.simple .hero-vis, #panel-setup.simple .hero-note { display: none; }
   #offCard.sheet .off-local-sub, #offCard .off-owner { display: none; }
   #offCard.sheet .off-owner { display: inline; }
-  #offCard.sheet .aisisbm { order: 9; margin-top: 12px; }
+  #offCard.sheet .aisisbm { order: 9; }
   #offCard.sheet { display: flex; flex-direction: column; }
   #offCard.sheet #schedStatus, #offCard.sheet #classDetails { display: none; }   /* the sheet is the copy that counts */
   .start h3 { font-family: var(--display); font-weight: 800; font-size: 22px; margin: 0 0 10px; }
@@ -566,16 +578,6 @@
 
         <div class="card rv" style="--d:.12s" id="offCard">
           <div class="step-head"><h3>Class offerings<small class="off-local-sub">The sections being offered this term. Upload the sheet, load it from a Google Sheets link, paste rows, or type them in.</small></h3></div>
-          <details class="aisisbm">
-            <summary>📋 copy classes from AISIS (bookmark button)<span class="off-owner"> · for whoever runs the sheet</span></summary>
-            <p class="hint" style="margin-top:6px">A bookmark you click while you're on AISIS's <b>Schedule of Classes</b> page. It copies every section shown, all pages, already in this site's format.</p>
-            <ol class="hint" style="padding-left:18px; margin:6px 0">
-              <li><b>Add the button once:</b> drag <a class="btn small" id="aisisBm" href="#" onclick="return false" draggable="true">📋 AISIS → Enlistment Hub</a> to your bookmarks bar. On a phone or if dragging doesn't work, make any bookmark, edit it, and replace its address with the code below.</li>
-              <li>On AISIS's Schedule of Classes page, choose the <b>term</b>, then click the bookmark. A small panel offers <b>every department</b> (it reads them one by one, about a minute, then you tap <b>copy</b>) or <b>this list only</b> (the department on screen). Pair sections in Remarks fill in Pair Subject.</li>
-              <li>Paste: into your term tab in the Google Sheet (click the first empty cell in the Subject column, Ctrl+V), or into the <b>paste rows</b> box here if you're not using the sheet.</li>
-            </ol>
-            <textarea id="aisisBmCode" readonly style="min-height:54px; font-size:11px" onclick="this.select()"></textarea>
-          </details>
           <div id="offSynced" class="hidden"></div>
           <div id="offLocal">
           <div class="seg" role="group" data-seg="add">
@@ -643,12 +645,25 @@
             <div class="classlist" id="classList"></div>
           </details>
           <details>
-            <summary>🎓 elective rules · which subjects count for each elective</summary>
+            <summary>🎓 which subjects count for each elective</summary>
             <div id="electiveRules"></div>
+          </details>
+          <details class="aisisbm">
+            <summary>📋 copy classes from AISIS (bookmark button)<span class="off-owner"> · for whoever runs the sheet</span></summary>
+            <p class="hint" style="margin-top:6px">A bookmark you click while you're on AISIS's <b>Schedule of Classes</b> page. It copies every section shown, all pages, already in this site's format.</p>
+            <ol class="hint" style="padding-left:18px; margin:6px 0">
+              <li><b>Add the button once:</b> drag <a class="btn small" id="aisisBm" href="#" onclick="return false" draggable="true">📋 AISIS → Enlistment Hub</a> to your bookmarks bar. On a phone or if dragging doesn't work, make any bookmark, edit it, and replace its address with the code below.</li>
+              <li>On AISIS's Schedule of Classes page, choose the <b>term</b>, then click the bookmark. A small panel offers <b>every department</b> (it reads them one by one, about a minute, then you tap <b>copy</b>) or <b>this list only</b> (the department on screen). Pair sections in Remarks fill in Pair Subject.</li>
+              <li>Paste: into your term tab in the Google Sheet (click the first empty cell in the Subject column, Ctrl+V), or into the <b>paste rows</b> box here if you're not using the sheet.</li>
+            </ol>
+            <textarea id="aisisBmCode" readonly style="min-height:54px; font-size:11px" onclick="this.select()"></textarea>
           </details>
         </div>
 
-        <details class="card rv moreopts" style="--d:.19s">
+
+        <button class="btn" data-go="pick" style="justify-self:start; padding:14px 26px; font-size:16px">Start picking classes →</button>
+        <button class="btn small soft hidden" data-act="install" id="installBtn" style="justify-self:start">📲 install as an app</button>
+        <details class="moreopts">
           <summary id="safeSum">💾 export, clear picks, start fresh</summary>
           <p class="hint" id="safeSub" style="margin:8px 0 0">Everything is saved in this browser only. Export to take your picks back to Google Sheets.</p>
           <div class="row">
@@ -657,8 +672,6 @@
             <button class="btn small danger" data-act="reset" id="resetBtn">start fresh</button>
           </div>
         </details>
-
-        <button class="btn" data-go="pick" style="justify-self:start; padding:14px 26px; font-size:16px">Start picking classes →</button>
       </div>
     </section>
   </main>
@@ -1476,7 +1489,7 @@ function renderPeople() {
       <div class="person-top"><button class="avatar-btn" data-act="emoji" data-i="${i}" title="pick an emoji">${crest(i)}</button><input type="text" class="pname" data-i="${i}" maxlength="18" placeholder="${i === 0 || connected() ? 'Your name' : 'Friend\'s name'}" value="${esc(p.name)}">
         <span class="tag">${COLORS[i].hue}</span>${!connected() && nP() > 1 ? `<button class="icon-btn" data-act="remove-person" data-i="${i}" title="remove" aria-label="remove ${esc(N(i))}">✕</button>` : ''}</div>
       <label class="field">IPS subjects this semester · one per line${p.ips ? ' · edits here only change this semester' : ''}</label>
-      <textarea class="ruled preqs" data-i="${i}" placeholder="MATH 21&#10;ENG 12&#10;IE 2&#10;Management Elective&#10;…">${esc(p.reqs.join('\n'))}</textarea>
+      <textarea class="ruled preqs" data-i="${i}" placeholder="MATH 21&#10;ENG 12&#10;IE 2&#10;Management Elective&#10;(or paste your IPS list from AISIS)">${esc(p.reqs.join('\n'))}</textarea>
       ${p.ips ? `<div class="ipsline">📜 from ${esc(p.ipsName || 'your IPS')}${p.ips && p.ips.pick ? ` · <b>${esc(p.ips.pick)}</b> (matches the open tab)` : ''}${p.ips && p.ips.edits && p.ips.edits[p.ips.pick] ? ` · edited by hand <button class="btn link" data-act="ips-reset" data-i="${i}">↺ use the IPS list</button>` : ''}${uniq(((p.ips && p.ips.blocks) || []).map(b => b.c)).length > 1 ? ` · <select data-side="${i}"><option value="L" ${p.side === 'L' ? 'selected' : ''}>left program</option><option value="R" ${p.side === 'R' ? 'selected' : ''}>right program</option></select>` : ''}</div>` : ''}
       <label class="field">🎓 Course & year${courseList().length ? ' · your course\'s IPS fills in your subjects' : ' · for classes reserved for certain courses'}</label>
       <div class="row" style="margin:0; gap:8px"><input type="text" class="pprog" data-i="${i}" list="dlProgs" maxlength="20" placeholder="e.g. AB MEC, SOSS, EC" value="${esc(p.prog || '')}" style="flex:1; min-width:120px; text-transform:uppercase">
@@ -2193,6 +2206,7 @@ async function importCode(raw) {
 
 /* ======================= image export ======================= */
 async function saveImage(list, opts = {}) {
+  if (opts.phone) return phoneWallpaper(list.length === 1 ? list[0] : (canEditQ(myIdx()) ? Math.max(0, myIdx()) : list[0]));
   const L = list.map(p => ({ p, color: p, label: N(p), set: C.picks[p] }));
   const blocks = weekBlocks(L).flat();
   if (!blocks.some(b => !b.busy)) return toast('Nothing to show yet. Pick some classes first.');
@@ -2204,8 +2218,8 @@ async function saveImage(list, opts = {}) {
                    : { bg: '#f6f2e9', paper: '#fffdf8', ink: '#24203a', muted: '#6b6683', line: '#e4dccb', dot: 'rgba(91,75,183,.12)', acc: '#5b4bb7' };
   // each person gets a lane wide enough for names and rooms; the photo grows to fit
   const lanes = L.length, headH = lanes > 1 ? 74 : 50;
-  const pad = 48, axisW = 70, top = 150, hourH = opts.phone ? 80 : 64, H = top + headH + (E - S) * hourH + 90;
-  const W = opts.phone ? Math.round(pad * 2 + axisW + 14 + days * Math.max(120, lanes * 110)) : Math.max(1240, Math.round(pad * 2 + axisW + 14 + days * Math.max(190, lanes * 165)));
+  const pad = 48, axisW = 70, top = 150, hourH = 64, H = top + headH + (E - S) * hourH + 90;
+  const W = Math.max(1240, Math.round(pad * 2 + axisW + 14 + days * Math.max(190, lanes * 165)));
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const g = cv.getContext('2d');
   g.fillStyle = col.bg; g.fillRect(0, 0, W, H);
@@ -2248,18 +2262,9 @@ async function saveImage(list, opts = {}) {
     g.restore();
   });
   g.font = '700 24px Caveat, cursive'; g.fillStyle = col.muted; g.fillText('made with Enlistment Hub ✎', pad, H - 30);
-  let out = cv;
-  if (opts.phone) {   // phone wallpaper: the week sits below the lock-screen clock, on the same dotted paper
-    const PW = 1290, PH = 2796, ph = document.createElement('canvas'); ph.width = PW; ph.height = PH;
-    const q = ph.getContext('2d');
-    q.fillStyle = col.bg; q.fillRect(0, 0, PW, PH);
-    q.fillStyle = col.dot; for (let x = 13; x < PW; x += 26) for (let y = 13; y < PH; y += 26) { q.beginPath(); q.arc(x, y, 1.6, 0, 7); q.fill(); }
-    const sc = Math.min((PW - 50) / W, (PH - 780) / H), dw = W * sc, dh = H * sc;
-    q.drawImage(cv, (PW - dw) / 2, 700 + (PH - 780 - dh) / 2, dw, dh);   // below the lock-screen clock
-    out = ph;
-  }
+  const out = cv;
   out.toBlob(async blob => {
-    const name = `${title.replace(/[^\w]+/g, '-').toLowerCase()}${opts.phone ? '-wallpaper' : ''}.png`;
+    const name = `${title.replace(/[^\w]+/g, '-').toLowerCase()}.png`;
     const file = new File([blob], name, { type: 'image/png' });
     if (navigator.canShare && navigator.canShare({ files: [file] }) && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) { try { await navigator.share({ files: [file], title }); return; } catch (e) { if (e.name === 'AbortError') return; } }
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
@@ -2269,6 +2274,68 @@ async function saveImage(list, opts = {}) {
 }
 
 
+/* phone wallpaper: one person's week, drawn tall for a lock screen (the clock sits on the empty top) */
+async function phoneWallpaper(p) {
+  const set = C.picks[p];
+  if (!set.length) return toast('Nothing to show yet. Pick some classes first.');
+  try { await document.fonts.ready; } catch (e) {}
+  const blocks = [];
+  set.forEach(i => C.parsed[i].forEach(ps => ps.days.forEach(d => blocks.push({ d, s: ps.s, e: ps.e, r: state.rows[i] }))));
+  people()[p].busy.forEach(b => b.days.forEach(d => blocks.push({ d, s: b.s, e: b.e, busy: b.label })));
+  const days = blocks.some(b => b.d === 5) ? 6 : 5;
+  const S = Math.floor(Math.min(...blocks.map(b => b.s)) / 60), E = Math.ceil(Math.max(...blocks.map(b => b.e)) / 60);
+  const dark = document.documentElement.dataset.theme === 'dark';
+  const col = dark ? { bg: '#16151f', paper: '#211f2d', ink: '#eeebf7', muted: '#a8a3bd', line: '#353247', dot: 'rgba(201,218,248,.08)', acc: '#a99bf0' }
+                   : { bg: '#f3f1f8', paper: '#fffeff', ink: '#24203a', muted: '#67627e', line: '#e1dcec', dot: 'rgba(91,75,183,.13)', acc: '#5b4bb7' };
+  const W = 1290, H = 2796, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d'), P = COLORS[p];
+  const rr = (x, y, w, h, r) => { g.beginPath(); if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h); };
+  const fit = (t, maxW, size, font) => { let z = size; do { g.font = font.replace('#', z); } while (g.measureText(t).width > maxW && --z > 16); return t; };
+  g.fillStyle = col.bg; g.fillRect(0, 0, W, H);
+  g.fillStyle = col.dot; for (let x = 15; x < W; x += 30) for (let y = 15; y < H; y += 30) { g.beginPath(); g.arc(x, y, 2, 0, 7); g.fill(); }
+  // title, below where the lock-screen clock and date sit
+  const top = 760, title = N(p) === 'You' ? 'My week' : `${N(p)}'s week`;
+  g.fillStyle = col.ink; g.font = '800 70px "Bricolage Grotesque", sans-serif'; g.fillText(title, 70, top);
+  g.fillStyle = col.acc; g.font = '700 48px Caveat, cursive'; g.fillText(state.sheetName || 'enlistment plan', 72, top + 58);
+  // the grid fills the rest of the screen, above the home bar
+  const px = 50, axisW = 74, gx = px + axisW, gw = W - px - gx - 10, cw = gw / days, headH = 64;
+  const gy = top + 140 + headH, gh = H - 300 - gy, hourH = gh / (E - S);
+  rr(px - 10, gy - headH - 14, W - (px - 10) * 2, gh + headH + 40, 36); g.fillStyle = col.paper; g.fill(); g.strokeStyle = col.line; g.lineWidth = 2; g.stroke();
+  g.textAlign = 'center'; g.fillStyle = col.ink; g.font = '800 34px "Bricolage Grotesque", sans-serif';
+  for (let d = 0; d < days; d++) g.fillText(DAY_SHORT[d], gx + cw * d + cw / 2, gy - 22);
+  g.textAlign = 'right'; g.font = '700 25px "DM Sans", sans-serif';
+  for (let h = S; h <= E; h++) {
+    const y = gy + (h - S) * hourH;
+    g.strokeStyle = col.line; g.lineWidth = 2; g.beginPath(); g.moveTo(gx, y); g.lineTo(gx + gw, y); g.stroke();
+    if (h < E) { g.fillStyle = col.muted; g.fillText(`${((h + 11) % 12) + 1}${h >= 12 ? 'pm' : 'am'}`, gx - 12, y + 9); }
+  }
+  g.textAlign = 'left';
+  blocks.sort((a, b) => !!b.busy - !!a.busy).forEach(b => {   // busy times first, classes on top
+    const x = gx + cw * b.d + 5, w = cw - 10, y = gy + (b.s - S * 60) / 60 * hourH + 3, h = (b.e - b.s) / 60 * hourH - 6;
+    rr(x, y, w, h, 18);
+    if (b.busy) {
+      g.save(); g.clip(); g.strokeStyle = P.cs; g.lineWidth = 8; for (let t = -h; t < w; t += 20) { g.beginPath(); g.moveTo(x + t, y + h); g.lineTo(x + t + h, y); g.stroke(); } g.restore();
+      rr(x, y, w, h, 18); g.setLineDash([10, 7]); g.strokeStyle = P.c; g.lineWidth = 3; g.stroke(); g.setLineDash([]);
+    } else { g.fillStyle = P.cs; g.fill(); g.strokeStyle = P.c; g.lineWidth = 3; g.stroke(); }
+    g.save(); rr(x, y, w, h, 18); g.clip(); g.fillStyle = P.cd;
+    const inner = w - 22, lines = b.busy ? [] : [b.r.section, b.r.room].filter(Boolean);
+    g.fillText(fit(b.busy || b.r.subject, inner, 31, '800 #px "Bricolage Grotesque", sans-serif'), x + 11, y + 38);
+    let ly = y + 72;
+    lines.forEach(t => { if (ly < y + h - 6) { g.fillText(fit(t, inner, 25, '600 #px "DM Sans", sans-serif'), x + 11, ly); ly += 32; } });
+    if (ly + 4 < y + h - 6) { g.fillText(fit(fmtRange(b.s, b.e), inner, 23, '500 #px "DM Sans", sans-serif'), x + 11, ly); }
+    g.restore();
+  });
+  g.textAlign = 'center'; g.font = '700 38px Caveat, cursive'; g.fillStyle = col.muted; g.fillText('made with Enlistment Hub ✎', W / 2, H - 200);
+  cv.toBlob(async blob => {
+    const name = `${title.replace(/[^\w]+/g, '-').toLowerCase()}-wallpaper.png`;
+    const file = new File([blob], name, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] }) && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) { try { await navigator.share({ files: [file], title }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast('wallpaper saved 📱');
+  }, 'image/png');
+}
+
 /* ----- save your week: picture, phone wallpaper, or your calendar ----- */
 async function exportMenu(list) {
   const one = list.length === 1 ? list[0] : (canEditQ(myIdx()) ? Math.max(0, myIdx()) : list[0]);
@@ -2276,7 +2343,7 @@ async function exportMenu(list) {
   const res = await openModal(`<h3>Save ${list.length > 1 ? 'the' : N(list[0]) === 'You' ? 'your' : esc(N(list[0])) + '\'s'} week</h3>
     <div class="exp-grid">
       ${b('img', '📸 Picture', 'the week as an image, to share')}
-      ${b('phone', '📱 Phone wallpaper', 'sized for your lock screen')}
+      ${b('phone', '📱 Phone wallpaper', `${list.length > 1 ? esc(N(one) === 'You' ? 'your' : N(one) + '\'s') + ' classes' : 'your classes'}, sized for your lock screen`)}
       ${b('cal', '📅 Add to calendar', `${list.length > 1 ? esc(N(one) === 'You' ? 'your' : N(one) + '\'s') + ' classes' : 'every class'}, repeating weekly`)}
     </div>
     <div class="row"><button class="btn small ghost" data-choice="">close</button></div>`);
@@ -2606,6 +2673,31 @@ async function editIps(i, fromStart) {
   undoable(`IPS saved ✦${p.ips && p.ips.pick ? ' showing ' + p.ips.pick : ''}`, snap);
   if (fromStart) { state.startSkipped = true; save(); syncSetup(); switchTab('pick'); }
 }
+
+/* pasting AISIS's IPS table ("T  ECON 113  3  M  Y  N") into a subject box keeps just the subject codes */
+const COURSE_RE = /^[A-Za-z][A-Za-z&]*\s?\d{1,3}(?:\.\d{1,3})?[A-Za-z]{0,2}(?:\s*\([^)]*\))?$/;
+function codesFromTable(text) {
+  const out = [];
+  String(text || '').split(/\r?\n/).forEach(line => {
+    const cells = line.split(/\t|\s{2,}/).map(x => x.trim()).filter(Boolean);
+    const c = cells.find(x => COURSE_RE.test(x) && !/^\d/.test(x));
+    if (c) out.push(c.replace(/\s*\([^)]*\)\s*$/, '').replace(/^([A-Za-z&]+)(\d)/, '$1 $2').toUpperCase());
+  });
+  return out;
+}
+document.addEventListener('paste', e => {
+  const ta = e.target.closest && e.target.closest('textarea.ruled');
+  const text = e.clipboardData && e.clipboardData.getData('text/plain');
+  if (!ta || !text || !/\t/.test(text)) return;   // plain one-per-line pastes go in as they are
+  const codes = codesFromTable(text);
+  if (!codes.length) return;
+  e.preventDefault();
+  const before = ta.value.slice(0, ta.selectionStart), after = ta.value.slice(ta.selectionEnd);
+  const ins = (before && !before.endsWith('\n') ? '\n' : '') + codes.join('\n') + (after && !after.startsWith('\n') ? '\n' : '');
+  ta.setRangeText(ins, ta.selectionStart, ta.selectionEnd, 'end');
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+  toast(`✦ ${codes.length} subject${codes.length === 1 ? '' : 's'} from your AISIS list`);
+});
 
 $('#peopleList').addEventListener('input', e => {
   const i = +e.target.dataset.i;
@@ -3593,12 +3685,28 @@ function renderOffSynced() {
   $('#offSynced').classList.toggle('hidden', !on);
   if (!on) return;
   const sy = SY();
-  $('#offSynced').innerHTML = `<div class="row" style="margin-top:0">${(sy.tabs || []).length > 1 ? `<select id="tabSel" style="width:auto">${sy.tabs.map(t => `<option ${t === sy.tab ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>` : `<b>${esc(sy.tab || 'loading…')}</b>`}
-      <button class="btn small soft" data-act="off-refresh">↻ refresh</button></div>
-    <p class="hint" style="margin:8px 0 0">${state.rows.length ? `✓ ${state.rows.length.toLocaleString()} sections loaded.` : 'Loading the classes…'} Wrong or missing class? Tell whoever runs the group's sheet.</p>`;
+  $('#offSynced').innerHTML = `<div class="offline">📚 ${(sy.tabs || []).length > 1 ? `<select id="tabSel" style="width:auto" aria-label="Term">${sy.tabs.map(t => `<option ${t === sy.tab ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>` : `<b>${esc(sy.tab || state.sheetName || 'classes')}</b>`}
+      <span class="n">${state.rows.length ? `${state.rows.length.toLocaleString()} sections` : 'loading…'}</span>
+      <button class="btn small ghost" data-act="off-refresh">↻ refresh</button></div>
+    <p class="offnote">Wrong or missing class? Tell whoever runs the group's sheet.</p>`;
 }
 document.addEventListener('change', e => { if (e.target.id === 'tabSel') (SY().tabPicked = true, loadOfferings(e.target.value)).then(() => toast(`showing ${e.target.value}`)).catch(err => toast(err.message)); });
 window.addEventListener('resize', measureBars);
+
+/* ======================= install as an app ======================= */
+let installEvt = null;
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; showInstall(); });
+window.addEventListener('appinstalled', () => { installEvt = null; showInstall(); toast('📲 installed · find Enlistment Hub on your home screen'); });
+const isIOS = () => /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function showInstall() { const b = $('#installBtn'); if (b) b.classList.toggle('hidden', standalone() || !(installEvt || isIOS())); }
+async function installApp() {
+  if (installEvt) { installEvt.prompt(); try { await installEvt.userChoice; } catch (e) {} installEvt = null; return showInstall(); }
+  openModal(`<h3>📲 Add to your home screen</h3><p>In Safari, tap the <b>Share</b> button (the square with an arrow), then <b>Add to Home Screen</b>. The Hub opens full-screen from there, like an app.</p>
+    <div class="row"><button class="btn small" data-choice="">got it</button></div>`);
+}
+showInstall();
 
 /* ======================= navigation & events ======================= */
 function switchTab(t) {
@@ -3759,6 +3867,7 @@ document.addEventListener('click', async e => {
     case 'save-image': return exportMenu([i]);
     case 'save-image-week': return exportMenu(people().map((_, p) => state.weekShow[p] ? p : -1).filter(p => p >= 0));
     case 'aisis-import': return canEdit(i) && importAisis(i);
+    case 'install': return installApp();
     case 'copy-sheet': {
       const text = cheatSheet(i);
       try { await navigator.clipboard.writeText(text); toast('copied! paste it into your notes 📋'); }
