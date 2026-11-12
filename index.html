@@ -72,12 +72,12 @@
   @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
   .rv { animation: rise .45s ease both; animation-delay: var(--d, 0s); }
   .sec { margin-top: 34px; }
-  .sec-head { margin-bottom: 22px; }
+  .sec-head { margin-bottom: 16px; }
   .eyebrow { font-family: var(--hand); font-size: 24px; font-weight: 700; color: var(--accent); margin: 0 0 2px; line-height: 1; transform: rotate(-1.5deg); display: inline-block; }
-  .sec h2 { font-family: var(--display); font-weight: 800; font-size: clamp(32px, 5.4vw, 52px); line-height: 1.02; margin: 0; letter-spacing: -.015em; text-wrap: balance; }
+  .sec h2 { font-family: var(--display); font-weight: 800; font-size: clamp(28px, 4vw, 40px); line-height: 1.05; margin: 0; letter-spacing: -.015em; text-wrap: balance; }
   mark { color: inherit; background: var(--hl); background-repeat: no-repeat; background-size: 100% 42%; background-position: 0 88%; padding: 0 .08em; animation: swipe .9s cubic-bezier(.3,.9,.3,1) .15s both; }
   @keyframes swipe { from { background-size: 0 42%; } }
-  .sub { color: var(--muted); margin: 10px 0 0; max-width: 62ch; font-size: 17px; }
+  .sub { color: var(--muted); margin: 6px 0 0; max-width: 62ch; font-size: 15.5px; }
 
   /* ---------- hero ---------- */
   .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: center; margin-top: 26px; }
@@ -204,7 +204,7 @@
 
   /* ---------- studio ---------- */
   .studio { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: 24px; align-items: start; }
-  @media (max-width: 900px) { .studio { grid-template-columns: 1fr; } }
+  @media (max-width: 900px) { .studio { grid-template-columns: minmax(0, 1fr); } }
   .stage { padding: 18px; position: sticky; top: calc(var(--tabh, 70px) + 70px); max-height: calc(100vh - var(--tabh, 70px) - 90px); overflow: auto; scrollbar-width: thin; }
   @media (max-width: 900px) { .stage { position: static; max-height: none; } }
   .stage-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
@@ -240,7 +240,23 @@
   .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
   .toolbar input { flex: 1; min-width: 160px; border-radius: 999px; }
 
-  .subj { margin-bottom: 20px; }
+  .subj { margin-bottom: 20px; scroll-margin-top: 64px; }
+  /* a subject that's already picked folds to one line; "change" opens it again */
+  .subj.done { margin-bottom: 8px; }
+  .subj-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; border: 2px solid var(--line); background: var(--surface); border-radius: 14px; padding: 9px 14px; cursor: pointer; }
+  .subj-row:hover { border-color: var(--muted); }
+  .subj-row h4 { font-family: var(--display); font-weight: 800; font-size: 17px; margin: 0; }
+  .subj-row .meta { font-size: 13px; color: var(--muted); flex: 1 1 200px; }
+  .subj-row .bk { margin-left: auto; }
+  .more-line { font-size: 13px; color: var(--muted); margin: 8px 2px 0; }
+  .jumpbar { position: sticky; top: 0; z-index: 20; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 8px 0 10px; margin: -4px 0 6px; background: var(--bg); }
+  .jumpbar::-webkit-scrollbar { display: none; }
+  .jumpbar button { flex: none; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 4px 11px; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .jumpbar button.ok { background: var(--ok-soft, var(--surface-2)); border-color: transparent; color: var(--muted); }
+  .jumpbar button.ok::before { content: "✓ "; }
+  .jumpbar button.bad { border-color: var(--bad); color: var(--bad); }
+  .jumpbar button.bad::before { content: "⚠ "; }
+  .jumpbar .cnt { flex: none; align-self: center; font-size: 12.5px; color: var(--muted); font-weight: 700; padding-right: 4px; }
   .subj-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
   .subj-head h4 { font-family: var(--display); font-weight: 800; font-size: 21px; margin: 0; }
   .needers { display: inline-flex; gap: 3px; align-items: center; font-size: 12px; color: var(--muted); }
@@ -249,11 +265,11 @@
   .st-conflict { background: var(--bad-soft); color: var(--bad); }
   .st-missing { background: var(--warn-soft); color: var(--warn); }
   .secs { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
-  .sec-card { position: relative; text-align: left; border: 2px solid var(--line); background: var(--surface); border-radius: 14px; padding: 12px 14px; cursor: pointer; display: grid; gap: 4px; align-content: start; transition: border-color .15s, background .15s, transform .15s; }
+  .sec-card { position: relative; text-align: left; border: 2px solid var(--line); background: var(--surface); border-radius: 14px; padding: 10px 12px; cursor: pointer; display: grid; gap: 4px; align-content: start; transition: border-color .15s, background .15s, transform .15s; }
   .sec-card:hover { border-color: var(--muted); transform: translateY(-2px); }
   .sec-card[aria-pressed="true"] { border-color: var(--c); background: var(--cs); color: var(--cd); }
   .sec-card .top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
-  .sec-card .nm { font-family: var(--display); font-weight: 800; font-size: 20px; line-height: 1.1; }
+  .sec-card .nm { font-family: var(--display); font-weight: 800; font-size: 18px; line-height: 1.1; }
   .sec-card .nm .st { color: #d6a21c; font-size: 16px; margin-left: 4px; }
   .sec-card .chk { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-size: 13px; font-weight: 800; flex: none; }
   .sec-card[aria-pressed="true"] .chk { background: var(--c); border-color: var(--c); color: white; animation: stamp .3s cubic-bezier(.3,1.6,.6,1); }
@@ -266,6 +282,7 @@
   .flag { display: inline-block; font-size: 12px; font-weight: 700; border-radius: 8px; padding: 2px 8px; margin-top: 4px; justify-self: start; }
   .flag.warn { background: var(--warn-soft); color: var(--warn); }
   .flag.bad { background: var(--bad-soft); color: var(--bad); }
+  .flag.forme { background: var(--surface-2); color: var(--muted); font-weight: 600; }
   .flag.plan { background: var(--note); color: var(--ink); font-family: var(--hand); font-size: 18px; padding: 0 9px; margin: 0; transform: rotate(-3deg); }
   .cardfoot { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
   #modal [hidden] { display: none !important; }
@@ -402,6 +419,11 @@
   .foot { text-align: center; margin-top: 50px; }
 
   /* ---------- easier start ---------- */
+  #panel-setup.settled .hero { grid-template-columns: 1fr; margin-top: 22px; }
+  #panel-setup.settled .hero h1 { font-size: clamp(28px, 4vw, 40px); margin: 0; }
+  #panel-setup.settled .hero .lede, #panel-setup.settled .hero-note, #panel-setup.settled .hero-vis { display: none; }
+  #panel-setup.settled > .sec { margin-top: 28px; }
+  .moreopts > summary { margin-top: 0; }
   #panel-setup.simple > .sec, #panel-setup.simple .hero-vis, #panel-setup.simple .hero-note { display: none; }
   #offCard.sheet .off-local-sub, #offCard .off-owner { display: none; }
   #offCard.sheet .off-owner { display: inline; }
@@ -474,8 +496,9 @@
     .hero-vis { display: none; }
     .sec { margin-top: 18px; }
     .sec-head { margin-bottom: 14px; }
-    .sec h2 { font-size: 34px; }
-    .sub { font-size: 15.5px; margin-top: 6px; }
+    .sec h2 { font-size: 27px; }
+    .sub { font-size: 14.5px; margin-top: 4px; }
+    #panel-pick .sec-head .sub, #panel-week .sec-head .sub { display: none; }   /* on a phone, the list matters more than the how-to line */
   }
 </style>
 </head>
@@ -516,22 +539,22 @@
 
     <section class="sec">
       <div class="steps">
-        <div class="card tape right rv" id="syncCard"></div>
-        <div class="card tape rv" style="--d:.05s">
-          <div class="step-head"><span class="num">1</span><h3 id="step1Title">Who's planning?<small>Start with yourself. Add friends whenever you want to compare (up to four people).</small></h3></div>
+        <div class="card tape rv">
+          <div class="step-head"><h3 id="step1Title">Who's planning?<small>Start with yourself. Add friends whenever you want to compare (up to four people).</small></h3></div>
           <div id="peopleList"></div>
-          <div class="row" style="margin-top:0" id="addPersonRow">
-            <button class="btn small ghost" data-act="add-person" id="addPersonBtn">+ add a friend</button>
-            <button class="btn small ghost" data-act="open-import">🔗 add a friend's share code</button>
-          </div>
-          <details>
-            <summary>🎓 elective rules</summary>
-            <div id="electiveRules"></div>
+          <details id="addPersonRow">
+            <summary>👯 compare with friends on this device</summary>
+            <p class="hint" style="margin:6px 0 0">No accounts needed: add up to 3 friends here, or open a friend's share link or code. To plan from different phones, make a profile and a room instead.</p>
+            <div class="row" style="margin-top:8px">
+              <button class="btn small ghost" data-act="add-person" id="addPersonBtn">+ add a friend</button>
+              <button class="btn small ghost" data-act="open-import">🔗 add a friend's share code</button>
+            </div>
           </details>
         </div>
+        <div class="card tape right rv" style="--d:.05s" id="syncCard"></div>
 
         <div class="card tape right rv" style="--d:.12s" id="offCard">
-          <div class="step-head"><span class="num">2</span><h3>Class offerings<small class="off-local-sub">The sections being offered this term. Upload the sheet, load it from a Google Sheets link, paste rows, or type them in.</small></h3></div>
+          <div class="step-head"><h3>Class offerings<small class="off-local-sub">The sections being offered this term. Upload the sheet, load it from a Google Sheets link, paste rows, or type them in.</small></h3></div>
           <details class="aisisbm">
             <summary>📋 copy classes from AISIS (bookmark button)<span class="off-owner"> · for whoever runs the sheet</span></summary>
             <p class="hint" style="margin-top:6px">A bookmark you click while you're on AISIS's <b>Schedule of Classes</b> page. It copies every section shown, all pages, already in this site's format.</p>
@@ -608,16 +631,21 @@
             <input type="text" id="classSearch" placeholder="🔎 search classes or profs" style="margin-top:10px; border-radius:999px">
             <div class="classlist" id="classList"></div>
           </details>
+          <details>
+            <summary>🎓 elective rules · which subjects count for each elective</summary>
+            <div id="electiveRules"></div>
+          </details>
         </div>
 
-        <div class="card rv" style="--d:.19s">
-          <div class="step-head"><span class="num">3</span><h3>Keep it safe<small id="safeSub">Everything is saved in this browser only. Export to take your picks back to Google Sheets.</small></h3></div>
-          <div class="row" style="margin-top:0">
+        <details class="card rv moreopts" style="--d:.19s">
+          <summary id="safeSum">💾 export, clear picks, start fresh</summary>
+          <p class="hint" id="safeSub" style="margin:8px 0 0">Everything is saved in this browser only. Export to take your picks back to Google Sheets.</p>
+          <div class="row">
             <button class="btn small" data-act="export">export .xlsx</button>
             <button class="btn small ghost" data-act="clear-picks">clear all picks</button>
             <button class="btn small danger" data-act="reset" id="resetBtn">start fresh</button>
           </div>
-        </div>
+        </details>
 
         <button class="btn" data-go="pick" style="justify-self:start; padding:14px 26px; font-size:16px">Start picking classes →</button>
       </div>
@@ -664,7 +692,7 @@
       <div class="sec-head">
         <p class="eyebrow">the big picture</p>
         <h2>The whole week</h2>
-        <p class="sub">Each person gets their own lane, with busy times shaded. Tap a name to show or hide them, tap a day to zoom in, and tap an empty spot to see which sections meet then.</p>
+        <p class="sub">Tap a name to show or hide them, a day to zoom in, or an empty spot to see what meets then.</p>
       </div>
       <div class="whobar">
         <div class="whochips" id="weekWho"></div>
@@ -687,7 +715,7 @@
       <div class="sec-head">
         <p class="eyebrow">enlistment day cheat sheet</p>
         <h2>Your checklist</h2>
-        <p class="sub">Every IPS subject with its Plan A, B and C, so you know exactly what to grab if a section fills up.</p>
+        <p class="sub">Plan A, B and C for every IPS subject, so you know what to grab if a section fills up.</p>
       </div>
       <div class="cols2" id="checkBody"></div>
     </section>
@@ -1441,7 +1469,7 @@ function renderPeople() {
         <span class="tag">${COLORS[i].hue}</span>${!connected() && nP() > 1 ? `<button class="icon-btn" data-act="remove-person" data-i="${i}" title="remove" aria-label="remove ${esc(N(i))}">✕</button>` : ''}</div>
       <label class="field">IPS subjects this semester · one per line${p.ips ? ' · edits here only change this semester' : ''}</label>
       <textarea class="ruled preqs" data-i="${i}" placeholder="MATH 21&#10;ENG 12&#10;IE 2&#10;Management Elective&#10;…">${esc(p.reqs.join('\n'))}</textarea>
-      ${p.ips ? `<div class="ipsline">📜 from ${esc(p.ipsName || 'your IPS')}${p.ips && p.ips.pick ? ` · <b>${esc(p.ips.pick)}</b> (matches the open tab)` : ''}${p.ips && p.ips.edits && p.ips.edits[p.ips.pick] ? ` · edited by hand <button class="btn link" data-act="ips-reset" data-i="${i}">↺ use the IPS list</button>` : ''}${p.ipsAoa || uniq(((p.ips && p.ips.blocks) || []).map(b => b.c)).length > 1 ? ` · <select data-side="${i}"><option value="L" ${p.side === 'L' ? 'selected' : ''}>left program</option><option value="R" ${p.side === 'R' ? 'selected' : ''}>right program</option></select>` : ''}</div>` : ''}
+      ${p.ips ? `<div class="ipsline">📜 from ${esc(p.ipsName || 'your IPS')}${p.ips && p.ips.pick ? ` · <b>${esc(p.ips.pick)}</b> (matches the open tab)` : ''}${p.ips && p.ips.edits && p.ips.edits[p.ips.pick] ? ` · edited by hand <button class="btn link" data-act="ips-reset" data-i="${i}">↺ use the IPS list</button>` : ''}${uniq(((p.ips && p.ips.blocks) || []).map(b => b.c)).length > 1 ? ` · <select data-side="${i}"><option value="L" ${p.side === 'L' ? 'selected' : ''}>left program</option><option value="R" ${p.side === 'R' ? 'selected' : ''}>right program</option></select>` : ''}</div>` : ''}
       <label class="field">🎓 Course & year${courseList().length ? ' · your course\'s IPS fills in your subjects' : ' · for classes reserved for certain courses'}</label>
       <div class="row" style="margin:0; gap:8px"><input type="text" class="pprog" data-i="${i}" list="dlProgs" maxlength="20" placeholder="e.g. AB MEC, SOSS, EC" value="${esc(p.prog || '')}" style="flex:1; min-width:120px; text-transform:uppercase">
         <select data-yr="${i}" style="width:auto">${['', '1', '2', '3', '4', '5'].map(y => `<option value="${y}" ${String(p.yr || '') === y ? 'selected' : ''}>${y ? ordinal(+y) + ' year' : `year: ${ipsYear(p) ? 'from your IPS (' + ordinal(ipsYear(p)) + ')' : 'from your IPS'}`}</option>`).join('')}</select></div>
@@ -1456,6 +1484,7 @@ function renderPeople() {
       </div>
     </div>`).join('');
   $('#addPersonRow').classList.toggle('hidden', connected());
+  if (nP() > 1) $('#addPersonRow').open = true;
   $('#addPersonBtn').classList.toggle('hidden', nP() >= CONFIG.MAX_PEOPLE);
 }
 function renderClassList() {
@@ -1474,6 +1503,7 @@ function renderStart() {
   el.classList.toggle('hidden', !on); $('#panel-setup .lede').classList.toggle('hidden', on);
   // a first visit shows only "Get started"; everything else in Setup waits until that's done (or skipped)
   $('#panel-setup').classList.toggle('simple', on && !state.startSkipped);
+  $('#panel-setup').classList.toggle('settled', !on);   // set up already: a short title instead of the big welcome
   if (!on || el.contains(document.activeElement)) return;
   const p = people()[startIdx()], cs = courseList();
   el.innerHTML = `<div class="card start tape">
@@ -1514,6 +1544,7 @@ function syncSetup() {
   $('#safeSub').textContent = connected() ? 'Your plan saves to the group\'s Google Sheet and follows you to any device you sign in on. Export a copy as .xlsx anytime.'
     : 'Everything is saved in this browser only. Export to take your picks back to Google Sheets.';
   $('#resetBtn').textContent = connected() ? 'sign out on this device' : 'start fresh';
+  $('#safeSum').textContent = connected() ? '💾 export, clear picks, sign out' : '💾 export, clear picks, start fresh';
   $('#resetBtn').classList.toggle('danger', !connected()); $('#resetBtn').classList.toggle('ghost', connected());
   syncDayChips();
 }
@@ -1526,6 +1557,8 @@ function renderHeroMini() {
 function setStatus(msg, err) { const el = $('#schedStatus'); el.textContent = msg; el.classList.toggle('err', !!err); }
 
 /* ----- pick ----- */
+const openSubj = new Set();   // picked subjects the person opened again with "change" (folded ones show as one line)
+const subjId = k => 'subj-' + String(k).replace(/[^a-z0-9]+/g, '-');
 function renderPick() {
   whoChips($('#pickWho'), 'pick');
   $('#pickWhoBar').classList.toggle('hidden', nP() < 2);   // alone: nothing to switch between (friends are added in Setup or the room menu)
@@ -1576,13 +1609,15 @@ function renderPick() {
   if (f === 'starred') entries = entries.filter(e => e.k && groups.get(e.k) && groups.get(e.k).idx.some(i => isStar(i, a)));
 
   let html = '', n = 0;
+  const jumps = [];
   entries.forEach(({ k, item }) => {
     const slot = item && item.kind === 'slot';
     const chooseBtn = slot && canEditQ(a) ? `<button class="bk" data-act="slot-choose" data-req="${esc(item.req)}">${item.subject ? 'change' : 'choose a subject'}</button>` : '';
     if (slot && !item.subject) {   // an elective with nothing chosen yet
       if (q && (tq || !norm(item.req).includes(q))) return;
       const opts = eligibleFor(a, item).length;
-      html += `<div class="subj rv" style="--d:${Math.min(n++ * .04, .4)}s"><div class="subj-head"><h4>${esc(slotLabel(item.req))}</h4><span class="pillst st-missing">elective · still needed</span></div>
+      jumps.push({ k: 'slot ' + norm(item.req), name: slotLabel(item.req), st: 'missing' });
+      html += `<div class="subj rv" id="${subjId('slot ' + norm(item.req))}" style="--d:${Math.min(n++ * .04, .4)}s"><div class="subj-head"><h4>${esc(slotLabel(item.req))}</h4><span class="pillst st-missing">elective · still needed</span></div>
         <div class="secs"><div class="sec-card" role="button" tabindex="0" data-act="slot-choose" data-req="${esc(item.req)}" style="border-style:dashed">
           <span class="nm" style="font-size:17px">✦ ${canEditQ(a) ? 'Choose a subject' : 'No subject chosen yet'}</span>
           <span class="meta">${opts ? `${opts} matching subject${opts === 1 ? '' : 's'} offered in this tab` : 'no matching subjects offered in this tab yet'}${item.rule.note ? ' · ' + esc(item.rule.note) : ''}</span></div></div></div>`;
@@ -1603,21 +1638,39 @@ function renderPick() {
     const tag = slot ? `<span class="chip">for ${esc(slotLabel(item.req))}${item.manual ? '' : item.suggested ? ' · from your IPS' : ' · auto'}</span>${chooseBtn}` : '';
     if (g && isAddOnSub(k) && !state.showTag && !q) {
       const mine = g.idx.find(i => state.rows[i].on[a]), partners = uniq(g.idx.map(partnerOf).filter(j => j >= 0).map(j => state.rows[j].subject)).sort();
-      html += `<div class="subj rv" style="--d:${Math.min(n++ * .04, .4)}s"><div class="subj-head"><h4>${esc(subj)}</h4>${mine !== undefined ? `<span class="pillst st-ready">✓ section ${esc(state.rows[mine].section)}</span>` : item ? '<span class="pillst st-missing">still needed</span>' : ''}</div>
+      jumps.push({ k, name: subj, st: mine !== undefined ? 'ready' : 'missing' });
+      html += `<div class="subj rv" id="${subjId(k)}" style="--d:${Math.min(n++ * .04, .4)}s"><div class="subj-head"><h4>${esc(subj)}</h4>${mine !== undefined ? `<span class="pillst st-ready">✓ section ${esc(state.rows[mine].section)}</span>` : item ? '<span class="pillst st-missing">still needed</span>' : ''}</div>
         <div class="sec-card" style="cursor:default; border-style:dashed"><span class="meta" style="font-size:14px">${mine !== undefined ? `${esc(rowLabel(state.rows[mine]))} · ${esc(whenText(C.parsed[mine], state.rows[mine]))}${partnerOf(mine) >= 0 ? ` · comes with <b>${esc(rowLabel(state.rows[partnerOf(mine)]))}</b>` : ''}`
           : `NSTP comes with a section of ${esc(partners.slice(0, 6).join(', '))}${partners.length > 6 ? ' and others' : ''}. Pick one of those, and its NSTP section pops up.`}</span>
           <button class="bk" data-act="tag-show" style="justify-self:start">show all ${g.idx.length} NSTP sections</button></div></div>`;
       return;
     }
+    if (k) jumps.push({ k, name: subj, st: st.st });
+    const mine = g ? g.idx.filter(i => state.rows[i].on[a]) : [];
+    if (st.st === 'ready' && mine.length && !q && !openSubj.has(k)) {   // already picked: one line
+      const i0 = mine[0], r0 = state.rows[i0], others = people().map((_, p) => p !== a && r0.on[p] ? p : -1).filter(p => p >= 0);
+      html += `<div class="subj done" id="${subjId(k)}"><div class="subj-row" role="button" tabindex="0" data-act="subj-open" data-k="${esc(k)}" aria-label="${esc(subj)}, section ${esc(mine.map(j => state.rows[j].section).join(', '))}. Show all sections">
+        <h4>${esc(subj)}</h4><span class="pillst st-ready">✓ ${esc(mine.map(j => state.rows[j].section).join(', '))}</span>
+        <span class="meta">${esc(whenText(C.parsed[i0], r0))}${r0.room ? ' · ' + esc(r0.room) : ''}${r0.instructor ? ' · ' + esc(r0.instructor) : ''}</span>
+        ${others.length ? `<span class="withs">with ${others.map(p => crest(p, 'sm')).join('')}</span>` : ''}${slot ? `<span class="chip">for ${esc(slotLabel(item.req))}</span>` : ''}
+        <button class="bk" data-act="subj-open" data-k="${esc(k)}">${canEditQ(a) ? 'change' : 'see sections'}</button></div></div>`;
+      return;
+    }
     const bks = backupList(a, subj);
-    html += `<div class="subj rv" style="--d:${Math.min(n++ * .04, .4)}s"><div class="subj-head"><h4>${esc(subj)}</h4><span class="row" style="margin:0; gap:8px">${tag}${nP() > 1 && needers.length ? `<span class="needers">needed by ${needers.map(i => crest(i, 'sm')).join('')}</span>` : ''}${pill}</span></div><div class="secs">`;
+    const fold = st.st === 'ready' && mine.length && !q ? `<button class="bk" data-act="subj-fold" data-k="${esc(k)}">fold ▴</button>` : '';
+    html += `<div class="subj rv" id="${k ? subjId(k) : ''}" style="--d:${Math.min(n++ * .04, .4)}s"><div class="subj-head"><h4>${esc(subj)}</h4><span class="row" style="margin:0; gap:8px">${tag}${nP() > 1 && needers.length ? `<span class="needers">needed by ${needers.map(i => crest(i, 'sm')).join('')}</span>` : ''}${pill}${fold}</span></div><div class="secs">`;
     if (!g) html += `<div class="sec-card" style="cursor:default"><span class="flag warn">not in the class offerings yet</span></div>`;
     idx.forEach(i => { html += secCard(i, a, bks); });
-    if (notMine) html += `<div class="sec-card" style="cursor:default; border-style:dashed; box-shadow:none"><span class="meta">${idx.length || hidden ? `+ ${notMine} reserved for other courses` : `all ${notMine} section${notMine > 1 ? 's are' : ' is'} reserved for other courses or years`}</span><button class="bk" data-act="for-off" style="justify-self:start">show them</button></div>`;
-    if (hidden) html += `<div class="sec-card" style="cursor:default; border-style:dashed; box-shadow:none"><span class="meta">${idx.length ? `+ ${hidden} more that clash` : `all ${hidden} section${hidden > 1 ? 's' : ''} clash with ${N(a) === 'You' ? 'your' : esc(N(a)) + '\'s'} other picks`}</span><button class="bk" data-act="fits-off" style="justify-self:start">show them</button></div>`;
-    html += '</div></div>';
+    html += '</div>';
+    const extra = [];
+    if (hidden) extra.push(`${idx.length ? `+ ${hidden} more that clash` : `all ${hidden} section${hidden > 1 ? 's' : ''} clash with ${N(a) === 'You' ? 'your' : esc(N(a)) + '\'s'} other picks`} <button class="bk" data-act="fits-off">show</button>`);
+    if (notMine) extra.push(`${idx.length || hidden ? `+ ${notMine} reserved for other courses` : `all ${notMine} section${notMine > 1 ? 's are' : ' is'} reserved for other courses or years`} <button class="bk" data-act="for-off">show</button>`);
+    if (extra.length) html += `<p class="more-line">${extra.join(' · ')}</p>`;
+    html += '</div>';
   });
-  list.innerHTML = html || emptyBox(f === 'starred' ? '☆' : '🔍', f === 'picked' ? 'Nothing picked yet' : f === 'starred' ? 'No favorites yet' : 'No matches', f === 'picked' ? 'Tap sections in "all" to add them.' : f === 'starred' ? 'Tap ⋯ on a section, then ★ star it, to keep your favorites here.' : 'Try a different search.');
+  // the subjects at a glance, to jump to one (only for "my subjects", where the list is the IPS)
+  const jb = f === 'need' && !q && jumps.length > 3 ? `<nav class="jumpbar" aria-label="Jump to a subject"><span class="cnt">${jumps.filter(j => j.st === 'ready').length}/${jumps.length}</span>${jumps.map(j => `<button data-act="jump" data-k="${esc(subjId(j.k))}" class="${j.st === 'ready' ? 'ok' : j.st === 'conflict' ? 'bad' : ''}">${esc(j.name)}</button>`).join('')}</nav>` : '';
+  list.innerHTML = html ? jb + html : emptyBox(f === 'starred' ? '☆' : '🔍', f === 'picked' ? 'Nothing picked yet' : f === 'starred' ? 'No favorites yet' : 'No matches', f === 'picked' ? 'Tap sections in "all" to add them.' : f === 'starred' ? 'Tap ⋯ on a section, then ★ star it, to keep your favorites here.' : 'Try a different search.');
 }
 /* ----- who a section is for: the "For" column ("AB MEC 3; BS ME 2; some BS LEARN") vs each person's program & year ----- */
 const ordinal = n => n + (['th', 'st', 'nd', 'rd'][n % 100 > 10 && n % 100 < 14 ? 0 : n % 10] || 'th');
@@ -1677,7 +1730,7 @@ function forChip(i, a) {
   const r = state.rows[i]; if (!r.forWho) return '';
   const en = enlistOf(i, a), all = forList(r).filter(e => e.all), some = forList(r).filter(e => !e.all);
   const list = l => l.map(e => e.prog === 'any' ? (e.years.length ? e.years.map(ordinal).join('/') + ' years' : 'everyone') : e.prog.toUpperCase() + (e.years.length ? ' ' + e.years.map(ordinal).join('/') : '')).join(', ');
-  if (en === 'mine') return `<span class="flag plan" title="${esc(r.forWho)}">🎓 for your course</span>`;
+  if (en === 'mine') return `<span class="flag forme" title="${esc(r.forWho)}">🎓 for your course</span>`;
   if (en === 'other') return `<span class="flag warn" title="${esc(r.forWho)}">🎓 reserved for ${esc(trunc(list(all), 70))}</span>`;
   if (en === 'unknown') return `<span class="flag" title="${esc(r.forWho)}" style="background:var(--surface-2); color:var(--muted)">🎓 for ${esc(trunc(list(all), 70))} · set your ${people()[a].prog ? 'year' : 'course'} in the 🎓 menu</span>`;
   return some.length ? `<span class="meta" title="${esc(r.forWho)}">🎓 some slots for ${esc(trunc(list(some), 70))}</span>` : '';
@@ -3471,7 +3524,10 @@ document.addEventListener('click', async e => {
       const snap = snapshot(); state.people[i].busy.splice(+el.dataset.b, 1);
       save(); syncSetup(); render(); return undoable('busy time removed', snap);
     }
-    case 'pick': return togglePick(i, state.active);
+    case 'pick': openSubj.delete(norm(state.rows[i].subject)); return togglePick(i, state.active);
+    case 'subj-open': openSubj.add(el.dataset.k); return render();
+    case 'subj-fold': openSubj.delete(el.dataset.k); return render();
+    case 'jump': { const t = document.getElementById(el.dataset.k); if (t) t.scrollIntoView({ behavior: smooth(), block: 'start' }); return; }
     case 'backup': return toggleBackup(i, state.active);
     case 'star': return toggleStar(i, state.active);
     case 'note': return editNote(i);
