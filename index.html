@@ -310,8 +310,9 @@
   .fitchip { font-size: 12px; font-weight: 700; border-radius: 999px; padding: 1px 8px; margin-left: 6px; white-space: nowrap; background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
   .fitchip.low { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
   .fitchip.none { background: var(--bad-soft); color: var(--bad); border-color: transparent; }
-  .freeblk { position: absolute; left: 0; right: 0; background: repeating-linear-gradient(135deg, rgba(31,154,138,.10) 0 6px, rgba(31,154,138,.04) 6px 12px); border-top: 1px dashed rgba(31,154,138,.45); border-bottom: 1px dashed rgba(31,154,138,.45); pointer-events: none; }
-  .freeblk span { position: absolute; right: 4px; top: 2px; font-size: 10px; font-weight: 700; color: #1d5e57; opacity: .8; }
+  .freeblk { position: absolute; left: 0; right: 0; background: rgba(31,154,138,.07); border-radius: 6px; pointer-events: none; }
+  .freeblk span { position: absolute; right: 6px; top: 3px; font-size: 10px; font-weight: 600; color: #1d5e57; opacity: .65; }
+  :root[data-theme="dark"] .freeblk { background: rgba(143,224,210,.06); }
   :root[data-theme="dark"] .freeblk span { color: #8fe0d2; }
   .lanekey { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 10px; }
   .lanekey span { font-size: 13px; font-weight: 700; border-radius: 999px; padding: 3px 10px; background: var(--cs); color: var(--cd); border: 1.5px solid var(--c); }
@@ -344,6 +345,32 @@
   .chip.good { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
 
   /* ---------- week ---------- */
+  .nextup { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 0 0 12px; padding: 10px 14px; border-radius: 14px; background: var(--cs); color: var(--cd); border: 1.5px solid var(--c); cursor: pointer; }
+  .nextup .lbl { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; opacity: .75; }
+  .nextup b { font-family: var(--display); font-size: 17px; }
+  :root[data-theme="dark"] .nextup { background: color-mix(in srgb, var(--c) 30%, var(--surface)); color: color-mix(in srgb, var(--c) 22%, #fff); }
+  .nowline { position: absolute; left: -1px; right: 0; height: 0; border-top: 2px solid var(--bad); z-index: 6; pointer-events: none; }
+  .nowline::before { content: ""; position: absolute; left: -5px; top: -6px; width: 10px; height: 10px; border-radius: 50%; background: var(--bad); }
+  .tl-head .istoday, #weekDays .istoday { color: var(--accent); }
+  .tl-col.today { background-color: color-mix(in srgb, var(--accent) 4%, transparent); }
+  .agenda { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .ag-day { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 12px; }
+  .ag-day.today { border-color: var(--accent); }
+  .ag-day h4 { font-family: var(--display); font-size: 17px; margin: 2px 4px 8px; display: flex; align-items: center; gap: 8px; }
+  .tday { font: 700 11px var(--body); text-transform: uppercase; letter-spacing: .06em; color: var(--accent-ink); background: var(--accent); border-radius: 999px; padding: 2px 8px; }
+  .ag { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: var(--cs); color: var(--cd); border-left: 4px solid var(--c); margin-top: 6px; cursor: pointer; }
+  .ag .t { flex: none; width: 98px; font-size: 12.5px; font-weight: 700; opacity: .85; }
+  .ag .w { flex: 1; min-width: 0; display: grid; }
+  .ag .w b { font-family: var(--display); font-size: 15px; }
+  .ag .m { font-size: 12.5px; opacity: .8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ag .tog { display: flex; }
+  .ag .tog i { display: grid; place-items: center; width: 20px; height: 20px; margin-left: -4px; border-radius: 50%; background: var(--cs); color: var(--cd); border: 1.5px solid var(--c); font: 800 10px/1 var(--display); font-style: normal; }
+  .ag.clash { box-shadow: 0 0 0 2px var(--bad); }
+  .ag.busy { background: repeating-linear-gradient(45deg, var(--cs) 0 5px, transparent 5px 10px); border-left-style: dashed; cursor: default; font-size: 13px; font-weight: 600; }
+  .ag.free { background: rgba(31,154,138,.08); border-left-color: rgba(31,154,138,.5); color: var(--muted); cursor: default; font-size: 13px; font-weight: 600; }
+  .ag-now { position: relative; height: 0; border-top: 2px solid var(--bad); margin: 10px 0 8px; }
+  .ag-now span { position: absolute; right: 0; top: -9px; background: var(--surface); color: var(--bad); font-size: 11px; font-weight: 700; padding: 0 6px; }
+  .ag-empty { color: var(--muted); font-size: 14px; margin: 4px; }
   .tl { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; overflow-x: auto; box-shadow: var(--shadow); }
   .tl-head { display: flex; min-width: 600px; padding: 10px 0; border-bottom: 1px solid var(--line-2); font-family: var(--display); font-weight: 800; font-size: 14px; text-align: center; }
   .tl-body { display: flex; position: relative; min-width: 600px; }
@@ -356,6 +383,9 @@
          background: var(--cs); color: var(--cd); border: 1.5px solid var(--c); transition: transform .12s; }
   .blk:hover { transform: scale(1.03); z-index: 5; }
   .blk.clash { box-shadow: 0 0 0 2px var(--bad); }
+  .blk.cmp { border-color: var(--pc); border-width: 2px; border-left-width: 5px; }   /* comparing: the outline says whose */
+  :root[data-theme="dark"] .blk:not(.busy), :root[data-theme="dark"] .mini .b:not(.busy):not(.ghost), :root[data-theme="dark"] .ag:not(.busy):not(.free) {
+    background: color-mix(in srgb, var(--c) 30%, var(--surface)); color: color-mix(in srgb, var(--c) 22%, #fff); }
   .blk.busy { pointer-events: none; }
   .blk .s { font-weight: 500; opacity: .85; }
   .blk .pf { font-style: italic; }
@@ -529,6 +559,19 @@
     .sec h2 { font-size: 27px; }
     .sub { font-size: 14.5px; margin-top: 4px; }
     #panel-pick .sec-head .sub, #panel-week .sec-head .sub { display: none; }   /* on a phone, the list matters more than the how-to line */
+  }
+  /* printing the checklist: just the cards, black on white, one person per page where it fits */
+  @media print {
+    @page { margin: 14mm; }
+    :root, :root[data-theme="dark"] { --bg: #fff; --surface: #fff; --surface-2: #f6f6f6; --ink: #111; --muted: #555; --line: #ccc; --line-2: #ddd; }
+    body { background: #fff !important; }
+    body::before, .topbar, .tabbar, .maintabs, .toast, .modal, .foot, .noprint, #checkBody .seg, #checkBody .row .btn, #panel-check .sec-head .sub { display: none !important; }
+    .wrap { max-width: none; padding: 0; }
+    #panel-check .sec-head h2 { font-size: 22pt; }
+    #checkBody { display: block; }
+    #checkBody .card { box-shadow: none; border: 1px solid #bbb; break-inside: avoid; margin-bottom: 12pt; }
+    #checkBody .ck { break-inside: avoid; }
+    .fitchip { border: 1px solid #999; }
   }
 </style>
 </head>
@@ -727,6 +770,7 @@
         <div class="whochips" id="weekWho"></div>
         <div class="row" style="margin-top:8px">
           <div class="seg" role="group" id="weekDays"></div>
+          <div class="row" id="weekView" style="margin:0; gap:8px"></div>
           <button class="btn small ghost" data-act="save-image-week">📸 save week</button>
         </div>
       </div>
@@ -795,6 +839,25 @@ const profPref = r => profKey(r) ? state.profs[profKey(r)] : undefined;
 const hex = h => [1, 3, 5].map(k => parseInt(h.slice(k, k + 2), 16));
 const toHex = a => '#' + a.map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
 const mix = list => toHex([0, 1, 2].map(k => list.reduce((s, h) => s + hex(h)[k], 0) / list.length));
+const hexMix = (a, b, w) => toHex([0, 1, 2].map(k => hex(a)[k] * w + hex(b)[k] * (1 - w)));   // w of a, the rest b
+/* every subject gets its own soft colour, the same in every view; a person's colour becomes the outline when comparing */
+const SUBJ_COLORS = [
+  { c: '#e07a3f', cs: '#fbe1d0', cd: '#8a3f14' }, { c: '#1f9a8a', cs: '#cdeee7', cd: '#1d5e57' }, { c: '#3b6fd1', cs: '#d6e3fb', cd: '#2e4a82' },
+  { c: '#c2417f', cs: '#f7dbe8', cd: '#86204f' }, { c: '#7c5cc4', cs: '#e4dcf3', cd: '#4b3d75' }, { c: '#c49311', cs: '#f8edc2', cd: '#6b5207' },
+  { c: '#5f9a3a', cs: '#ddefd0', cd: '#355c1c' }, { c: '#d9534f', cs: '#f9d8d6', cd: '#8a2522' }, { c: '#2a8fb8', cs: '#d0ebf5', cd: '#1b5671' },
+  { c: '#9b4fa8', cs: '#efdaf3', cd: '#5e2768' }
+];
+const strHash = t => [...String(t)].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
+function subjColorMap(subs) {
+  const N = SUBJ_COLORS.length, used = new Set(), m = new Map();
+  [...new Set(subs)].sort().forEach(sub => { let k = strHash(sub) % N; for (let t = 0; t < N && used.has(k); t++) k = (k + 1) % N; used.add(k); m.set(sub, SUBJ_COLORS[k]); });
+  return m;
+}
+const subjColor = i => { const k = norm(state.rows[i].subject); return (C && C.subjCol && C.subjCol.get(k)) || SUBJ_COLORS[strHash(k) % SUBJ_COLORS.length]; };
+const svars = K => `--c:${K.c};--cs:${K.cs};--cd:${K.cd}`;
+const isDark = () => document.documentElement.dataset.theme === 'dark';
+/* for pictures: night mode gets deep tinted blocks with light text */
+const canvasK = (K, dark, paper) => dark ? { c: K.c, cs: hexMix(K.c, paper, .34), cd: hexMix(K.c, '#ffffff', .22) } : K;
 /* CSS vars for one person, or a blend for several (lilac + sky → the original combined color) */
 function pv(ids) {
   ids = [].concat(ids);
@@ -1446,7 +1509,7 @@ function miniWeek(blocks, h = 260) {
 }
 function blocksFor(p, rowIdx, opts = {}) {
   const out = [];
-  rowIdx.forEach(i => C.parsed[i].forEach(ps => ps.days.forEach(d => out.push({ day: d, s: ps.s, e: ps.e, style: pv(p), label: opts.noLabel ? '' : state.rows[i].subject, clash: opts.clash !== false && C.conf[i][p] && C.conf[i][p].length, lane: opts.lane, lanes: opts.lanes }))));
+  rowIdx.forEach(i => C.parsed[i].forEach(ps => ps.days.forEach(d => out.push({ day: d, s: ps.s, e: ps.e, style: opts.personColor ? pv(p) : svars(subjColor(i)), label: opts.noLabel ? '' : state.rows[i].subject, clash: opts.clash !== false && C.conf[i][p] && C.conf[i][p].length, lane: opts.lane, lanes: opts.lanes }))));
   if (opts.busy !== false) people()[p].busy.forEach(b => b.days.forEach(d => out.push({ day: d, s: b.s, e: b.e, style: pv(p), label: opts.noLabel ? '' : b.label, busy: true, lane: opts.lane, lanes: opts.lanes })));
   return out;
 }
@@ -1455,6 +1518,7 @@ function blocksFor(p, rowIdx, opts = {}) {
 function render() {
   if (state.active >= nP()) state.active = 0;
   C = compute();
+  C.subjCol = subjColorMap(people().flatMap((_, p) => C.picks[p].map(i => norm(state.rows[i].subject))));
   checkCelebrate();
   if (view === 'setup') renderHeroMini();
   if (view === 'pick') renderPick();
@@ -1479,10 +1543,10 @@ function whoChips(el, mode) {
   if (mode !== 'week' && connected()) {
     if (SY().room) { if (nP() < CONFIG.MAX_PEOPLE) html += `<button class="who add" data-act="invite">+ invite</button>`; }
     else html += `<button class="who add" data-act="add-person-go">👥 compare with friends</button>`;
-    if (nP() === 1) html += `<span class="note-hand" style="font-size:19px">← ${SY().room ? 'invite friends to this room' : 'make or join a room'}</span>`;
+    if (nP() === 1) html += `<span class="hint" style="margin:0">← ${SY().room ? 'invite friends to this room' : 'make or join a room'}</span>`;
   } else {
     if (mode !== 'week' && nP() < CONFIG.MAX_PEOPLE) html += `<button class="who add" data-act="add-person-go">+ friend</button>`;
-    if (mode !== 'week' && nP() === 1) html += `<span class="note-hand" style="font-size:19px">← add a friend to compare</span>`;
+    if (mode !== 'week' && nP() === 1) html += `<span class="hint" style="margin:0">← add a friend to compare</span>`;
   }
   el.innerHTML = html;
 }
@@ -1566,7 +1630,7 @@ function syncSetup() {
   renderStart();
   renderSyncCard(); renderPeople(); renderClassList(); renderOffSynced(); renderElectiveRules();
   setStatus(state.rows.length ? `✓ ${state.rows.length} sections ready${state.sheetName ? ` from "${state.sheetName}"` : ''}` : '');
-  $('#urlRefresh').innerHTML = state.sheetUrl && !connected() ? `<div class="row"><button class="btn small soft" data-act="refresh-url">↻ refresh from your Google Sheet</button><span class="note-hand" style="font-size:18px">keeps everyone's picks</span></div>` : '';
+  $('#urlRefresh').innerHTML = state.sheetUrl && !connected() ? `<div class="row"><button class="btn small soft" data-act="refresh-url">↻ refresh from your Google Sheet</button><span class="hint" style="margin:0">keeps everyone's picks</span></div>` : '';
   $('#dlSubjects').innerHTML = uniq(state.rows.map(r => r.subject)).map(s => `<option value="${esc(s)}">`).join('');
   $('#dlPairs').innerHTML = state.rows.map(r => `<option value="${esc(rowLabel(r))}">`).join('');
   $('#dlProgs').innerHTML = uniq(state.rows.flatMap(r => forList(r).map(e => e.prog.toUpperCase()))).filter(x => x !== 'ANY').sort().map(x => `<option value="${esc(x)}">`).join('');
@@ -1874,47 +1938,121 @@ function scoreOf(set, p) {
   return { set, days: nDays, gaps, first, maxDay, maxRow, freeWeekday, friends, fav, hops: hopsOf(days).length };
 }
 /* ----- week ----- */
+const todayIdx = () => (new Date().getDay() + 6) % 7;   // Mon = 0 … Sat = 5, Sun = 6
+const nowMin = () => { const t = new Date(); return t.getHours() * 60 + t.getMinutes(); };
+let weekS = CONFIG.DAY_START;   // the first hour on the grid (trimmed to your classes)
+const weekViewNow = () => state.weekView || (window.innerWidth < 640 ? 'list' : 'grid');
+/* your next class (or the one you're in), counted from right now */
+function nextClass(p) {
+  const set = C.picks[p]; if (!set || !set.length) return null;
+  const d0 = todayIdx(), m0 = nowMin();
+  let best = null;
+  set.forEach(i => C.parsed[i].forEach(ps => ps.days.forEach(d => {
+    const now = d === d0 && ps.s <= m0 && ps.e > m0;
+    let dist = ((d - d0 + 7) % 7) * 1440 + ps.s - m0;
+    if (dist < 0 && !now) dist += 7 * 1440;
+    if (now) dist = -1;
+    if (!best || dist < best.dist) best = { dist, i, d, s: ps.s, e: ps.e, now };
+  })));
+  return best;
+}
+function nextCard(p) {
+  const n = nextClass(p); if (!n) return '';
+  const r = state.rows[n.i], d0 = todayIdx();
+  const when = n.now ? `now, until ${fmtT(n.e)}` : `${n.d === d0 && n.dist < 1440 ? 'today' : n.d === (d0 + 1) % 7 && n.dist < 2880 ? 'tomorrow' : DAY_NAMES[n.d]} ${fmtT(n.s)}`;
+  return `<div class="nextup" style="${svars(subjColor(n.i))}" data-act="goto" data-i="${n.i}" data-p="${p}" role="button" tabindex="0">
+    <span class="lbl">${n.now ? 'In class' : 'Next'}${nP() > 1 ? ' · ' + esc(N(p)) : ''}</span><b>${esc(rowLabel(r))}</b><span>${when}${r.room ? ' · ' + esc(r.room) : ''}</span></div>`;
+}
+/* overlapping meetings share the day's width; everything else gets the whole column */
+function layoutOverlap(list) {
+  const sorted = [...list].sort((x, y) => x.s - y.s || y.e - x.e), out = [];
+  let cluster = [], colsEnd = [], clusterEnd = -1;
+  const flush = () => { const n = colsEnd.length; cluster.forEach(b => out.push({ ...b, n, span: 1 })); cluster = []; colsEnd = []; };
+  sorted.forEach(b => {
+    if (b.s >= clusterEnd) { flush(); clusterEnd = -1; }
+    let c = colsEnd.findIndex(e => e <= b.s); if (c < 0) { c = colsEnd.length; colsEnd.push(0); }
+    colsEnd[c] = b.e; clusterEnd = Math.max(clusterEnd, b.e);
+    cluster.push({ ...b, col: c });
+  });
+  flush();
+  return out;
+}
 function renderWeek() {
   whoChips($('#weekWho'), 'week'); $('#weekWho').classList.toggle('hidden', nP() < 2);   // alone: no one to show or hide
   $('#roomFeed').innerHTML = feedCard(); markFeedSeen();   // the room's "what's new" and 💌 requests
-  const grid = $('#weekGrid');
-  if (state.weekDay === null || state.weekDay === undefined) state.weekDay = window.innerWidth < 640 ? Math.min(Math.max(new Date().getDay() - 1, 0), 5) : -1;
-  const wd = state.weekDay, days = wd < 0 ? [0, 1, 2, 3, 4, 5] : [wd];
-  $('#weekDays').innerHTML = `<button data-act="wd" data-d="-1" aria-pressed="${wd < 0}">all</button>` + DAY_SHORT.map((d, i) => `<button data-act="wd" data-d="${i}" aria-pressed="${wd === i}">${d}</button>`).join('');
-  if (!state.rows.length) { grid.innerHTML = noClasses(); $('#slotPanel').innerHTML = ''; $('#weekStats').innerHTML = ''; return; }
+  const grid = $('#weekGrid'), mode = weekViewNow();
+  if (state.weekDay === null || state.weekDay === undefined) state.weekDay = window.innerWidth < 640 ? Math.min(todayIdx(), 5) : -1;
+  const wd = state.weekDay, days = wd < 0 ? [0, 1, 2, 3, 4, 5] : [wd], td = todayIdx();
+  $('#weekDays').innerHTML = `<button data-act="wd" data-d="-1" aria-pressed="${wd < 0}">all</button>` + DAY_SHORT.map((d, i) => `<button data-act="wd" data-d="${i}" aria-pressed="${wd === i}"${i === td ? ' class="istoday" title="today"' : ''}>${d}</button>`).join('');
+  if (!state.rows.length) { grid.innerHTML = noClasses(); $('#slotPanel').innerHTML = ''; $('#weekStats').innerHTML = ''; $('#weekView').innerHTML = ''; return; }
   const shown = people().map((_, i) => state.weekShow[i] ? i : -1).filter(i => i >= 0);
   // lanes: one per person, or (when comparing drafts) one per draft of one person
   const dp = draftOwner(), dsel = draftSel();
   renderDraftBar(dp, dsel);
   const L = dsel.length ? dsel.map((k, n) => ({ p: dp, color: n, label: draftLabel(dp, k), set: draftSet(dp, k), clashIn: true }))
     : shown.map(p => ({ p, color: p, label: N(p), set: C.picks[p] }));
-  const H = CONFIG.HOUR_PX, S = CONFIG.DAY_START, E = gridEnd();
-  const pos = b => `top:${(b.s - S * 60) / 60 * H}px; height:${Math.max((b.e - b.s) / 60 * H, 18)}px; left:${2 + b.col * 96 / b.n}%; width:${b.span * 96 / b.n - 1.5}%`;
-  const cols = weekBlocks(L).map(list => list.map(b => {
-    const st = `${pv(b.who.map(n => L[n].color))}; ${pos(b)}`;
-    if (b.busy) return `<div class="blk busy" style="${st}">${esc(b.busy)}</div>`;
-    const r = b.r, pf = profShort(r.instructor, wd >= 0), names = b.who.map(n => L[n].label).join(' + ');
-    const dots = b.who.length > 1 ? `<span class="tog">${b.who.map(n => `<i style="${pv(L[n].color)}">${esc(dsel.length ? String(n + 1) : (people()[L[n].p].emoji || N(L[n].p)[0].toUpperCase()))}</i>`).join('')}</span>` : '';
-    return `<div class="blk${b.clash ? ' clash' : ''}${b.span < b.n ? ' narrow' : ''}" style="${st}" data-act="goto" data-i="${b.i}" data-p="${L[b.who[0]].p}" role="button" tabindex="0"
-      aria-label="${esc(`${names}: ${rowLabel(r)}, ${DAY_NAMES[b.d]} ${fmtRange(b.s, b.e)}${r.room ? ', ' + r.room : ''}${r.instructor ? ', ' + r.instructor : ''}${b.clash ? ', clashes' : ''}`)}" title="${esc(`${names} · ${rowLabel(r)} · ${fmtRange(b.s, b.e)}${r.room ? ' · ' + r.room : ''}${r.instructor ? ' · ' + r.instructor : ''}`)}">${dots}${esc(r.subject)} ${esc(r.section)}${r.room ? `<br><span class="s">${esc(r.room)}</span>` : ''}${pf ? `<br><span class="s pf">${esc(pf)}</span>` : ''}</div>`;
-  }));
-  if (!dsel.length && shown.length > 1) freeTogether(shown, E).forEach((g, d) => g.forEach(([s0, e0]) => cols[d].unshift(`<div class="freeblk" style="top:${(s0 - S * 60) / 60 * H}px; height:${(e0 - s0) / 60 * H}px" title="everyone shown is free ${fmtRange(s0, e0)}"><span>free together</span></div>`)));
-  if (slot && days.includes(slot.day)) cols[slot.day].push(`<div class="slotmark" style="top:${(slot.min - S * 60) / 60 * H}px"></div>`);
-  const tag = n => dsel.length ? String(n + 1) : (people()[L[n].p].emoji || N(L[n].p)[0].toUpperCase());
-  const laneTags = L.length > 1 ? `<div class="lanetags">${L.map((ln, n) => `<span><i style="${pv(ln.color)}" title="${esc(ln.label)}">${esc(tag(n))}</i>${wd >= 0 ? ` ${esc(ln.label)}` : ''}</span>`).join('')}</div>` : '';
-  let axis = '';
-  for (let h = S + 1; h < E; h++) axis += `<span style="top:${(h - S) * H}px">${((h + 11) % 12) + 1}${h >= 12 ? 'pm' : 'am'}</span>`;
-  grid.innerHTML = `<div class="tl ${wd >= 0 ? 'one' : ''}">
-    <div class="tl-head"><div style="width:50px; flex:none"></div>${days.map(d => `<div style="flex:1">${wd >= 0 ? DAY_NAMES[d] : DAY_SHORT[d]}${laneTags}</div>`).join('')}</div>
-    <div class="tl-body" style="height:${(E - S) * H}px"><div class="tl-axis">${axis}</div>${days.map(d => `<div class="tl-col" data-act="slot" data-day="${d}">${cols[d].join('')}</div>`).join('')}</div>
-  </div>`;
-  renderSlot();
+  const multi = L.length > 1, over = multi && !!state.weekOverlay;
+  $('#weekView').innerHTML = `<div class="seg" role="group" aria-label="View"><button data-act="wview" data-v="grid" aria-pressed="${mode === 'grid'}">▦ grid</button><button data-act="wview" data-v="list" aria-pressed="${mode === 'list'}">☰ list</button></div>`
+    + (multi && mode === 'grid' ? `<div class="seg" role="group" aria-label="Layout"><button data-act="wlay" data-v="lanes" aria-pressed="${!over}" title="each person in their own lane">side by side</button><button data-act="wlay" data-v="over" aria-pressed="${over}" title="everyone's classes in one column per day">together</button></div>` : '');
+  const me = canEditQ(myIdx()) ? Math.max(0, myIdx()) : (shown[0] ?? 0);
+  const next = !dsel.length ? nextCard(L.length === 1 ? L[0].p : me) : '';
+  const byDay = weekBlocks(L, over);
+  const pcol = b => mix(b.who.map(n => COLORS[L[n].color].c));
+  const who = b => multi ? `<span class="tog">${b.who.map(n => `<i style="${pv(L[n].color)}">${esc(dsel.length ? String(n + 1) : (people()[L[n].p].emoji || N(L[n].p)[0].toUpperCase()))}</i>`).join('')}</span>` : '';
+  const free = !dsel.length && shown.length > 1 ? freeTogether(shown) : DAY_SHORT.map(() => []);
+
+  if (mode === 'list') {
+    const m0 = nowMin();
+    grid.innerHTML = next + `<div class="agenda">${days.map(d => {
+      const items = [...byDay[d].filter((b, k, arr) => arr.findIndex(x => x.i === b.i && x.s === b.s && !!x.busy === !!b.busy && x.busy === b.busy) === k).map(b => ({ ...b, kind: b.busy ? 'busy' : 'class' })),
+        ...free[d].map(([s0, e0]) => ({ s: s0, e: e0, kind: 'free' }))].sort((x, y) => x.s - y.s);
+      let html = '', nowDone = d !== td;
+      items.forEach(b => {
+        if (!nowDone && b.s > m0) { html += `<div class="ag-now"><span>now · ${fmtT(m0)}</span></div>`; nowDone = true; }
+        if (b.kind === 'free') html += `<div class="ag free"><span class="t">${fmtRange(b.s, b.e)}</span><span>free together 🌿</span></div>`;
+        else if (b.kind === 'busy') html += `<div class="ag busy" style="${pv(L[b.who[0]].color)}"><span class="t">${fmtRange(b.s, b.e)}</span><span>${esc(b.busy)}</span>${who(b)}</div>`;
+        else { const r = b.r, pf = profShort(r.instructor);
+          html += `<div class="ag${b.clash ? ' clash' : ''}" style="${svars(subjColor(b.i))}" data-act="goto" data-i="${b.i}" data-p="${L[b.who[0]].p}" role="button" tabindex="0">
+            <span class="t">${fmtRange(b.s, b.e)}</span><span class="w"><b>${esc(r.subject)} ${esc(r.section)}</b><span class="m">${[r.room, pf].filter(Boolean).map(esc).join(' · ')}${b.clash ? ' · <span style="color:var(--bad)">⚠ clash</span>' : ''}</span></span>${who(b)}</div>`; }
+      });
+      if (!nowDone && items.length && m0 < 24 * 60) html += `<div class="ag-now"><span>now · ${fmtT(m0)}</span></div>`;
+      return `<div class="ag-day${d === td ? ' today' : ''}"><h4>${DAY_NAMES[d]}${d === td ? '<span class="tday">today</span>' : ''}</h4>${html || '<p class="ag-empty">no classes 🌿</p>'}</div>`;
+    }).join('')}</div>`;
+    $('#slotPanel').innerHTML = '';
+  } else {
+    // the grid starts and ends with your classes, so the blocks get the room
+    const all = days.flatMap(d => byDay[d]);
+    const H = CONFIG.HOUR_PX, S = all.length ? Math.floor(Math.min(...all.map(b => b.s)) / 60) : CONFIG.DAY_START;
+    const E = all.length ? Math.max(S + 3, Math.ceil(Math.max(...all.map(b => b.e)) / 60)) : gridEnd();
+    weekS = S;
+    const pos = b => `top:${(b.s - S * 60) / 60 * H}px; height:${Math.max((b.e - b.s) / 60 * H, 18)}px; left:${2 + b.col * 96 / b.n}%; width:${b.span * 96 / b.n - 1.5}%`;
+    const cols = byDay.map(list => list.map(b => {
+      if (b.busy) return `<div class="blk busy" style="${pv(b.who.map(n => L[n].color))}; ${pos(b)}">${esc(b.busy)}</div>`;
+      const r = b.r, pf = profShort(r.instructor), names = b.who.map(n => L[n].label).join(' + ');
+      const st = `${svars(subjColor(b.i))}; --pc:${pcol(b)}; ${pos(b)}`;
+      return `<div class="blk${multi ? ' cmp' : ''}${b.clash ? ' clash' : ''}${b.span < b.n ? ' narrow' : ''}" style="${st}" data-act="goto" data-i="${b.i}" data-p="${L[b.who[0]].p}" role="button" tabindex="0"
+        aria-label="${esc(`${names}: ${rowLabel(r)}, ${DAY_NAMES[b.d]} ${fmtRange(b.s, b.e)}${r.room ? ', ' + r.room : ''}${r.instructor ? ', ' + r.instructor : ''}${b.clash ? ', clashes' : ''}`)}" title="${esc(`${names} · ${rowLabel(r)} · ${fmtRange(b.s, b.e)}${r.room ? ' · ' + r.room : ''}${r.instructor ? ' · ' + r.instructor : ''}`)}">${who(b)}${esc(r.subject)} ${esc(r.section)}${r.room ? `<br><span class="s">${esc(r.room)}</span>` : ''}${pf ? `<br><span class="s pf">${esc(pf)}</span>` : ''}</div>`;
+    }));
+    free.forEach((g, d) => g.forEach(([s0, e0]) => cols[d].unshift(`<div class="freeblk" style="top:${(s0 - S * 60) / 60 * H}px; height:${(e0 - s0) / 60 * H}px" title="everyone shown is free ${fmtRange(s0, e0)}"><span>free together</span></div>`)));
+    if (slot && days.includes(slot.day)) cols[slot.day].push(`<div class="slotmark" style="top:${(slot.min - S * 60) / 60 * H}px"></div>`);
+    const m0 = nowMin();
+    if (td < 6 && days.includes(td) && m0 > S * 60 && m0 < E * 60) cols[td].push(`<div class="nowline" style="top:${(m0 - S * 60) / 60 * H}px" title="now"></div>`);
+    const tag = n => dsel.length ? String(n + 1) : (people()[L[n].p].emoji || N(L[n].p)[0].toUpperCase());
+    const laneTags = multi && !over ? `<div class="lanetags">${L.map((ln, n) => `<span><i style="${pv(ln.color)}" title="${esc(ln.label)}">${esc(tag(n))}</i>${wd >= 0 ? ` ${esc(ln.label)}` : ''}</span>`).join('')}</div>` : '';
+    let axis = '';
+    for (let h = S + 1; h < E; h++) axis += `<span style="top:${(h - S) * H}px">${((h + 11) % 12) + 1}${h >= 12 ? 'pm' : 'am'}</span>`;
+    grid.innerHTML = next + `<div class="tl ${wd >= 0 ? 'one' : ''}">
+      <div class="tl-head"><div style="width:50px; flex:none"></div>${days.map(d => `<div style="flex:1"${d === td ? ' class="istoday"' : ''}>${wd >= 0 ? DAY_NAMES[d] : DAY_SHORT[d]}${laneTags}</div>`).join('')}</div>
+      <div class="tl-body" style="height:${(E - S) * H}px"><div class="tl-axis">${axis}</div>${days.map(d => `<div class="tl-col${d === td ? ' today' : ''}" data-act="slot" data-day="${d}">${cols[d].join('')}</div>`).join('')}</div>
+    </div>`;
+    renderSlot();
+  }
   if (dsel.length) renderDraftStats(dp, dsel); else renderWeekStats(shown);
   $('[data-act=save-image-week]').classList.toggle('hidden', !!dsel.length);
 }
 /* Week blocks per day, one per class meeting: a class people share is one block with all of them in it.
    L: [{ p, color, label, set, clashIn }], one per person (or per draft when comparing drafts) */
-function weekBlocks(L) {
+function weekBlocks(L, overlay) {
   const byDay = DAY_SHORT.map(() => []), seen = new Map();
   L.forEach((ln, n) => {
     people()[ln.p].busy.forEach(b => b.days.forEach(d => byDay[d] && byDay[d].push({ d, s: b.s, e: b.e, busy: b.label || 'busy', who: [n] })));
@@ -1930,6 +2068,7 @@ function weekBlocks(L) {
   });
   // everyone keeps their own lane, so a gap in your lane always means you're free; a shared class
   // stretches across the lanes of the people in it (split in two if someone in between isn't taking it)
+  if (overlay) return byDay.map(list => layoutOverlap(list.map(b => ({ ...b, who: [...b.who].sort((x, y) => x - y) }))));
   return byDay.map(list => list.flatMap(b => {
     const w = [...b.who].sort((x, y) => x - y), runs = [[w[0]]];
     w.slice(1).forEach(n => n === runs[runs.length - 1].slice(-1)[0] + 1 ? runs[runs.length - 1].push(n) : runs.push([n]));
@@ -1937,7 +2076,7 @@ function weekBlocks(L) {
   }));
 }
 /* An hour or more between classes when nobody shown has class or a busy time */
-function freeTogether(list, E) {
+function freeTogether(list) {
   const busy = DAY_SHORT.map(() => []);
   list.forEach(p => { C.picks[p].forEach(i => C.parsed[i].forEach(ps => ps.days.forEach(d => busy[d].push([ps.s, ps.e])))); people()[p].busy.forEach(b => b.days.forEach(d => busy[d].push([b.s, b.e]))); });
   return busy.map(iv => {
@@ -1995,7 +2134,7 @@ function profShort(name, full) {
 }
 function renderSlot() {
   const el = $('#slotPanel');
-  if (!slot) { el.innerHTML = `<p class="note-hand" style="text-align:center; margin-top:14px">tap an empty spot on the grid to see what's offered then ✎</p>`; return; }
+  if (!slot) { el.innerHTML = `<p class="hint" style="text-align:center; margin-top:12px">Tap an empty spot on the grid to see what's offered then.</p>`; return; }
   const all = state.rows.map((r, i) => i).filter(i => C.parsed[i].some(ps => ps.days.includes(slot.day) && ps.s <= slot.min && ps.e > slot.min));
   // only what someone here needs: their IPS subjects and chosen electives, not NSTP (it comes with its partner), not reserved for others
   const shownP = people().map((_, p) => p).filter(p => state.weekShow[p]);
@@ -2046,7 +2185,7 @@ function fitCount(p, x) {
 function renderCheck() {
   const el = $('#checkBody'), hard = state.checkSort === 'hard';
   el.innerHTML = `<div class="row" style="grid-column:1/-1; margin:0 0 4px"><div class="seg" role="group"><button data-act="check-sort" data-v="ips" aria-pressed="${!hard}">IPS order</button><button data-act="check-sort" data-v="hard" aria-pressed="${hard}">hardest to fit first</button></div>
-    <span class="hint" style="margin:0">the number on each subject = sections that still fit your other picks</span></div>` + people().map((p, i) => {
+    <span class="hint" style="margin:0">the number on each subject = sections that still fit your other picks</span><button class="btn small ghost noprint" data-act="print" style="margin-left:auto">🖨 print</button></div>` + people().map((p, i) => {
     const plan = C.plans[i], pr = progressOf(i);
     const fits = new Map(plan.items.map(x => [x, fitCount(i, x)]));
     const items = hard ? [...plan.items].sort((a, b) => fits.get(a) - fits.get(b)) : plan.items;
@@ -2065,7 +2204,7 @@ function renderCheck() {
     const extraRows = extras.map(j => `<div class="ck"><span class="ic">+</span><button type="button" class="t" data-act="jump" data-p="${i}" data-s="${esc(state.rows[j].subject)}">${esc(rowLabel(state.rows[j]))}</button><div class="plans"><span>${esc(whenText(C.parsed[j], state.rows[j]))} · not on the IPS list</span></div></div>`).join('');
     return `<div class="card rv" style="${pv(i)}; --d:${i * .07}s">
       <div class="prog-top">${crest(i, 'lg')}<span class="nm">${esc(N(i))}</span>${pr.req ? `<span class="pnum">${pr.done}/${pr.req}</span>` : ''}</div>
-      ${pr.req ? `<div class="bar"><i style="width:${pr.done / pr.req * 100}%"></i></div><div class="note-hand">${msg}</div>` : `<p class="hint">Add the IPS subjects in Setup to track progress.</p>`}
+      ${pr.req ? `<div class="bar"><i style="width:${pr.done / pr.req * 100}%"></i></div><div class="hint" style="margin:6px 0 0">${msg}</div>` : `<p class="hint">Add the IPS subjects in Setup to track progress.</p>`}
       <div style="margin-top:8px">${reqRows}${extraRows}</div>
       ${!reqRows && !extraRows ? '<p class="hint">No picks yet.</p>' : ''}
       <div class="row"><button class="btn small ghost" data-act="copy-sheet" data-i="${i}">📋 copy as text</button><button class="btn small ghost" data-act="save-image" data-i="${i}">📸 save image</button></div>
@@ -2253,10 +2392,10 @@ async function saveImage(list, opts = {}) {
   const tint = ids => { const P = ids.map(n => COLORS[L[n].color]); return P.length === 1 ? P[0] : { c: mix(P.map(k => k.c)), cs: mix(P.map(k => k.cs)), cd: mix(P.map(k => k.cd)) }; };
   blocks.filter(b => b.d < days).forEach(b => {
     const lw = (cw - 12) / b.n, x = gx + cw * b.d + 6 + b.col * lw, y = gy + (b.s - S * 60) / 60 * hourH + 2, w = b.span * lw - 4, h = (b.e - b.s) / 60 * hourH - 4;
-    const K = tint(b.who), small = w < 150, dotR = 11, dotsW = b.who.length > 1 ? b.who.length * (dotR * 2 - 4) + 8 : 0;
+    const PK = tint(b.who), K = b.busy ? PK : canvasK(subjColor(b.i), dark, col.paper), small = w < 150, dotR = 11, dotsW = b.who.length > 1 ? b.who.length * (dotR * 2 - 4) + 8 : 0;
     rr(x, y, w, h, 10);
     if (b.busy) { g.save(); g.clip(); g.strokeStyle = K.cs; g.lineWidth = 5; for (let t = -h; t < w; t += 12) { g.beginPath(); g.moveTo(x + t, y + h); g.lineTo(x + t + h, y); g.stroke(); } g.restore(); rr(x, y, w, h, 10); g.setLineDash([6, 4]); g.strokeStyle = K.c; g.lineWidth = 2; g.stroke(); g.setLineDash([]); }
-    else { g.fillStyle = K.cs; g.fill(); g.strokeStyle = K.c; g.lineWidth = 2; g.stroke(); }
+    else { g.fillStyle = K.cs; g.fill(); g.strokeStyle = lanes > 1 ? PK.c : K.c; g.lineWidth = lanes > 1 ? 3 : 2; g.stroke(); }
     g.save(); rr(x, y, w, h, 10); g.clip(); g.fillStyle = K.cd;
     g.save(); g.beginPath(); g.rect(x, y, w - dotsW, 30); g.clip();   // the title stops before the faces
     g.font = `800 ${small ? 14 : 16}px "Bricolage Grotesque", sans-serif`; g.fillText(b.busy || `${b.r.subject} ${b.r.section}`, x + 8, y + 21);
@@ -2288,7 +2427,7 @@ async function phoneWallpaper(p) {
   if (!set.length) return toast('Nothing to show yet. Pick some classes first.');
   try { await document.fonts.ready; } catch (e) {}
   const blocks = [];
-  set.forEach(i => C.parsed[i].forEach(ps => ps.days.forEach(d => blocks.push({ d, s: ps.s, e: ps.e, r: state.rows[i] }))));
+  set.forEach(i => C.parsed[i].forEach(ps => ps.days.forEach(d => blocks.push({ d, s: ps.s, e: ps.e, r: state.rows[i], i }))));
   people()[p].busy.forEach(b => b.days.forEach(d => blocks.push({ d, s: b.s, e: b.e, busy: b.label })));
   const days = blocks.some(b => b.d === 5) ? 6 : 5;
   const S = Math.floor(Math.min(...blocks.map(b => b.s)) / 60), E = Math.ceil(Math.max(...blocks.map(b => b.e)) / 60);
@@ -2324,8 +2463,8 @@ async function phoneWallpaper(p) {
     if (b.busy) {
       g.save(); g.clip(); g.strokeStyle = P.cs; g.lineWidth = 8; for (let t = -h; t < w; t += 20) { g.beginPath(); g.moveTo(x + t, y + h); g.lineTo(x + t + h, y); g.stroke(); } g.restore();
       rr(x, y, w, h, 18); g.setLineDash([10, 7]); g.strokeStyle = P.c; g.lineWidth = 3; g.stroke(); g.setLineDash([]);
-    } else { g.fillStyle = P.cs; g.fill(); g.strokeStyle = P.c; g.lineWidth = 3; g.stroke(); }
-    g.save(); rr(x, y, w, h, 18); g.clip(); g.fillStyle = P.cd;
+    } else { const K = canvasK(subjColor(b.i), dark, col.paper); g.fillStyle = K.cs; g.fill(); g.strokeStyle = K.c; g.lineWidth = 3; g.stroke(); }
+    g.save(); rr(x, y, w, h, 18); g.clip(); g.fillStyle = b.busy ? P.cd : canvasK(subjColor(b.i), dark, col.paper).cd;
     const inner = w - 22, lines = b.busy ? [] : [b.r.section, b.r.room].filter(Boolean);
     g.fillText(fit(b.busy || b.r.subject, inner, 31, '800 #px "Bricolage Grotesque", sans-serif'), x + 11, y + 38);
     let ly = y + 72;
@@ -2689,7 +2828,7 @@ function codesFromTable(text) {
   String(text || '').split(/\r?\n/).forEach(line => {
     const cells = line.split(/\t|\s{2,}/).map(x => x.trim()).filter(Boolean);
     const c = cells.find(x => COURSE_RE.test(x) && !/^\d/.test(x));
-    if (c) out.push(c.replace(/\s*\([^)]*\)\s*$/, '').replace(/^([A-Za-z&]+)(\d)/, '$1 $2').toUpperCase());
+    if (c) out.push(c.replace(/\s*\([^)]*\)\s*$/, '').replace(/^([A-Za-z&]+)(\d)/, '$1 $2'));   // keeps the sheet's capitals (SocSc, ArtAp)
   });
   return out;
 }
@@ -3701,6 +3840,8 @@ function renderOffSynced() {
 document.addEventListener('change', e => { if (e.target.id === 'tabSel') (SY().tabPicked = true, loadOfferings(e.target.value)).then(() => toast(`showing ${e.target.value}`)).catch(err => toast(err.message)); });
 window.addEventListener('resize', measureBars);
 
+setInterval(() => { if (view === 'week' && !document.hidden) render(); }, 60000);   // keeps the now line and next class current
+
 /* ======================= install as an app ======================= */
 let installEvt = null;
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
@@ -3877,6 +4018,7 @@ document.addEventListener('click', async e => {
     case 'save-image-week': return exportMenu(people().map((_, p) => state.weekShow[p] ? p : -1).filter(p => p >= 0));
     case 'aisis-import': return canEdit(i) && importAisis(i);
     case 'install': return installApp();
+    case 'print': return window.print();
     case 'copy-sheet': {
       const text = cheatSheet(i);
       try { await navigator.clipboard.writeText(text); toast('copied! paste it into your notes 📋'); }
@@ -3885,10 +4027,12 @@ document.addEventListener('click', async e => {
     }
     case 'slot-choose': return chooseSlot(el.dataset.req);
     case 'wd': state.weekDay = +el.dataset.d; save(); return render();
+    case 'wview': state.weekView = el.dataset.v; slot = null; save(); return render();
+    case 'wlay': state.weekOverlay = el.dataset.v === 'over'; save(); return render();
     case 'goto': return jumpTo(i, +el.dataset.p);
     case 'slot': {
       const rect = el.getBoundingClientRect(), y = e.clientY - rect.top;
-      const min = Math.round((CONFIG.DAY_START * 60 + y / CONFIG.HOUR_PX * 60) / 15) * 15;
+      const min = Math.round((weekS * 60 + y / CONFIG.HOUR_PX * 60) / 15) * 15;
       slot = { day: +el.dataset.day, min }; render();
       setTimeout(() => $('#slotPanel').scrollIntoView({ behavior: smooth(), block: 'nearest' }), 60);
       return;
