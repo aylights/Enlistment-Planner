@@ -271,6 +271,8 @@
   .jumpbar button.ok::before { content: "✓ "; }
   .jumpbar button.bad { border-color: var(--bad); color: var(--bad); }
   .jumpbar button.bad::before { content: "⚠ "; }
+  .jumpbar .foldbtn { background: var(--surface-2); color: var(--muted); }
+  .jumpbar .foldbtn[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
   .jumpbar .cnt { flex: none; align-self: center; font-size: 12.5px; color: var(--muted); font-weight: 700; padding-right: 4px; }
   .subj-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
   .subj-head h4 { font-family: var(--display); font-weight: 800; font-size: 18px; margin: 0; letter-spacing: .01em; }
@@ -500,7 +502,12 @@
     .topbar .seg button { padding: 5px 10px; font-size: 13px; }
     /* tabs live at the bottom, like an app */
     .tabbar { padding: 0; margin: 0; border: 0; background: transparent; }
-    .tabbar .roombar { margin-top: 8px; }
+    .tabbar .roombar { margin-top: 0; padding: 8px 0; flex-wrap: nowrap; background: var(--bg); }
+    .tabbar:has(.roombar:not(.hidden)) { background: var(--bg); border-bottom: 1px solid var(--line); }
+    .roombar select { flex: 1 1 auto; min-width: 0; max-width: none; }
+    .roombar .btn, .roombar .syncst { flex: none; }
+    .whobar { position: static; }   /* on a phone, the grid gets the screen; names and days scroll away */
+    #weekDays button { padding: 6px 9px; }
     .maintabs { position: fixed; z-index: 60; left: 0; right: 0; bottom: 0; border-radius: 18px 18px 0 0; border: 0; border-top: 1px solid var(--line);
       padding: 6px max(6px, env(safe-area-inset-left)) calc(6px + env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-right)); gap: 2px;
       box-shadow: 0 -8px 24px -14px rgba(36, 32, 58, .35); overflow: visible; }
@@ -1622,7 +1629,8 @@ document.addEventListener('pointerover', e => {
   if (i >= 0) { const k = norm(state.rows[i].subject); if (k !== pickFocus) pickFocus = k; }
   renderStageMini();
 });
-const openSubj = new Set();   // picked subjects the person opened again with "change" (folded ones show as one line)
+const openSubj = new Set(), foldedSubj = new Set();   // picked subjects opened again, or folded one by one
+const isFolded = k => state.foldPicked ? !openSubj.has(k) : foldedSubj.has(k);
 const subjId = k => 'subj-' + String(k).replace(/[^a-z0-9]+/g, '-');
 function renderPick() {
   whoChips($('#pickWho'), 'pick');
@@ -1712,7 +1720,7 @@ function renderPick() {
     }
     if (k) jumps.push({ k, name: subj, st: st.st });
     const mine = g ? g.idx.filter(i => state.rows[i].on[a]) : [];
-    if (st.st === 'ready' && mine.length && !q && !openSubj.has(k)) {   // already picked: one line
+    if (st.st === 'ready' && mine.length && !q && isFolded(k)) {   // folded: one line
       const i0 = mine[0], r0 = state.rows[i0], others = people().map((_, p) => p !== a && r0.on[p] ? p : -1).filter(p => p >= 0);
       html += `<div class="subj done" id="${subjId(k)}"><div class="subj-row" role="button" tabindex="0" data-act="subj-open" data-k="${esc(k)}" aria-label="${esc(subj)}, section ${esc(mine.map(j => state.rows[j].section).join(', '))}. Show all sections">
         <h4>${esc(subj)}</h4><span class="pillst st-ready">✓ ${esc(mine.map(j => state.rows[j].section).join(', '))}</span>
@@ -1722,7 +1730,7 @@ function renderPick() {
       return;
     }
     const bks = backupList(a, subj);
-    const fold = st.st === 'ready' && mine.length && !q ? `<button class="bk" data-act="subj-fold" data-k="${esc(k)}">fold ▴</button>` : '';
+    const fold = st.st === 'ready' && mine.length && !q ? `<button class="bk" data-act="subj-fold" data-k="${esc(k)}">fold ▴</button>` : '';   // fold just this one
     html += `<div class="subj rv" id="${k ? subjId(k) : ''}" data-k="${esc(k || '')}" style="--d:${Math.min(n++ * .04, .4)}s"><div class="subj-head"><h4>${esc(subj)}</h4><span class="row" style="margin:0; gap:8px">${tag}${nP() > 1 && needers.length ? `<span class="needers">needed by ${needers.map(i => crest(i, 'sm')).join('')}</span>` : ''}${pill}${fold}</span></div><div class="secs">`;
     if (!g) html += `<div class="sec-card" style="cursor:default"><span class="flag warn">not in the class offerings yet</span></div>`;
     idx.forEach(i => { html += secCard(i, a, bks); });
@@ -1734,7 +1742,7 @@ function renderPick() {
     html += '</div>';
   });
   // the subjects at a glance, to jump to one (only for "my subjects", where the list is the IPS)
-  const jb = f === 'need' && !q && jumps.length > 3 ? `<nav class="jumpbar" aria-label="Jump to a subject"><span class="cnt">${jumps.filter(j => j.st === 'ready').length}/${jumps.length}</span>${jumps.map(j => `<button data-act="jump" data-k="${esc(subjId(j.k))}" class="${j.st === 'ready' ? 'ok' : j.st === 'conflict' ? 'bad' : ''}">${esc(j.name)}</button>`).join('')}</nav>` : '';
+  const jb = f === 'need' && !q && jumps.length > 3 ? `<nav class="jumpbar" aria-label="Jump to a subject"><button class="foldbtn" data-act="fold-all" aria-pressed="${!!state.foldPicked}" title="fold picked subjects to one line">${state.foldPicked ? '▾ unfold' : '▴ fold'} picked</button><span class="cnt">${jumps.filter(j => j.st === 'ready').length}/${jumps.length}</span>${jumps.map(j => `<button data-act="jump" data-k="${esc(subjId(j.k))}" class="${j.st === 'ready' ? 'ok' : j.st === 'conflict' ? 'bad' : ''}">${esc(j.name)}</button>`).join('')}</nav>` : '';
   requestAnimationFrame(updatePickFocus);
   list.innerHTML = html ? jb + html : emptyBox(f === 'starred' ? '☆' : '🔍', f === 'picked' ? 'Nothing picked yet' : f === 'starred' ? 'No favorites yet' : 'No matches', f === 'picked' ? 'Tap sections in "all" to add them.' : f === 'starred' ? 'Tap ⋯ on a section, then ★ star it, to keep your favorites here.' : 'Try a different search.');
 }
@@ -3795,9 +3803,10 @@ document.addEventListener('click', async e => {
       const snap = snapshot(); state.people[i].busy.splice(+el.dataset.b, 1);
       save(); syncSetup(); render(); return undoable('busy time removed', snap);
     }
-    case 'pick': openSubj.delete(norm(state.rows[i].subject)); return togglePick(i, state.active);
-    case 'subj-open': openSubj.add(el.dataset.k); return render();
-    case 'subj-fold': openSubj.delete(el.dataset.k); return render();
+    case 'pick': return togglePick(i, state.active);
+    case 'subj-open': openSubj.add(el.dataset.k); foldedSubj.delete(el.dataset.k); return render();
+    case 'subj-fold': openSubj.delete(el.dataset.k); foldedSubj.add(el.dataset.k); return render();
+    case 'fold-all': state.foldPicked = !state.foldPicked; openSubj.clear(); foldedSubj.clear(); save(); render(); return toast(state.foldPicked ? 'picked subjects fold to one line · tap one to open it' : 'showing every section again');
     case 'jump': { const t = document.getElementById(el.dataset.k); if (t) t.scrollIntoView({ behavior: smooth(), block: 'start' }); return; }
     case 'backup': return toggleBackup(i, state.active);
     case 'star': return toggleStar(i, state.active);
