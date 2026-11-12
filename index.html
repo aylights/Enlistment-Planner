@@ -206,6 +206,7 @@
   .studio { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: 24px; align-items: start; }
   @media (max-width: 900px) { .studio { grid-template-columns: minmax(0, 1fr); } }
   .stage { padding: 18px; position: sticky; top: calc(var(--tabh, 70px) + 70px); max-height: calc(100vh - var(--tabh, 70px) - 90px); overflow: auto; scrollbar-width: thin; }
+  .studio.nowho .stage { top: calc(var(--tabh, 70px) + 14px); max-height: calc(100vh - var(--tabh, 70px) - 28px); }
   @media (max-width: 900px) { .stage { position: static; max-height: none; } }
   .stage-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
   .stage-title { font-family: var(--display); font-weight: 800; font-size: 23px; line-height: 1.1; }
@@ -232,6 +233,13 @@
   .mini .axis { position: relative; height: var(--h, 260px); font-size: 9px; color: var(--muted); }
   .mini .axis span { position: absolute; right: 2px; transform: translateY(-50%); }
   .mini .b { position: absolute; left: 3px; right: 3px; border-radius: 5px; background: var(--cs); border: 1.5px solid var(--c); color: var(--cd); font-size: 9px; font-weight: 700; padding: 1px 3px; overflow: hidden; line-height: 1.15; white-space: nowrap; text-overflow: ellipsis; }
+  /* open sections of the subject you're looking at, drawn as dashed outlines */
+  .mini .b.ghost { background: transparent; color: var(--muted); border-style: dashed; font-weight: 600; z-index: 1; }
+  .mini .b.ghost.hot { color: var(--cd); }
+  .profbtn { text-align: left; }
+  .mini .b.ghost.nofit { opacity: .4; }
+  .mini .b.ghost.hot { background: var(--cs); border-style: solid; opacity: 1; z-index: 2; box-shadow: 0 0 0 2px var(--c); }
+  .stage-sub b { color: var(--accent); }
   .mini .b.clash { border-color: var(--bad); box-shadow: 0 0 0 1.5px var(--bad); }
   .mini .b.busy, .blk.busy { background: repeating-linear-gradient(45deg, var(--cs) 0 5px, transparent 5px 10px); border-style: dashed; }
   .mini.deco .b { animation: pop .5s cubic-bezier(.3,1.5,.6,1) both; animation-delay: var(--d, 0s); }
@@ -249,7 +257,7 @@
   .subj-row .meta { font-size: 13px; color: var(--muted); flex: 1 1 200px; }
   .subj-row .bk { margin-left: auto; }
   .more-line { font-size: 13px; color: var(--muted); margin: 8px 2px 0; }
-  .jumpbar { position: sticky; top: 0; z-index: 20; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 8px 0 10px; margin: -4px 0 6px; background: var(--bg); }
+  .jumpbar { position: sticky; top: var(--tabh, 0px); z-index: 20; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 8px 0 10px; margin: -4px 0 6px; background: var(--bg); }
   .jumpbar::-webkit-scrollbar { display: none; }
   .jumpbar button { flex: none; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 4px 11px; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
   .jumpbar button.ok { background: var(--ok-soft, var(--surface-2)); border-color: transparent; color: var(--muted); }
@@ -258,7 +266,7 @@
   .jumpbar button.bad::before { content: "⚠ "; }
   .jumpbar .cnt { flex: none; align-self: center; font-size: 12.5px; color: var(--muted); font-weight: 700; padding-right: 4px; }
   .subj-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-  .subj-head h4 { font-family: var(--display); font-weight: 800; font-size: 21px; margin: 0; }
+  .subj-head h4 { font-family: var(--display); font-weight: 800; font-size: 18px; margin: 0; letter-spacing: .01em; }
   .needers { display: inline-flex; gap: 3px; align-items: center; font-size: 12px; color: var(--muted); }
   .pillst { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; }
   .st-ready { background: var(--ok-soft); color: var(--ok); }
@@ -405,6 +413,9 @@
   .choice-list { display: grid; gap: 8px; margin-top: 12px; }
   .choice { text-align: left; display: flex; gap: 10px; align-items: center; border: 2px solid var(--line); background: var(--surface); border-radius: 14px; padding: 10px 12px; cursor: pointer; font-weight: 700; }
   .choice:hover { border-color: var(--accent); }
+  .exp-grid { display: grid; gap: 8px; margin-top: 12px; }
+  .exp-opt { display: grid; justify-items: start; gap: 2px; text-align: left; padding: 12px 14px; border-radius: 14px; }
+  .exp-opt span { font-weight: 500; color: var(--muted); font-size: 13px; }
   .modal .card.wide { width: min(900px, 100%); }
   .ipsyrs { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 12px; border-radius: 18px; }
   .ipsyrs button .n { font-weight: 500; opacity: .7; margin-left: 4px; }
@@ -551,9 +562,9 @@
             </div>
           </details>
         </div>
-        <div class="card tape right rv" style="--d:.05s" id="syncCard"></div>
+        <div class="card rv" style="--d:.05s" id="syncCard"></div>
 
-        <div class="card tape right rv" style="--d:.12s" id="offCard">
+        <div class="card rv" style="--d:.12s" id="offCard">
           <div class="step-head"><h3>Class offerings<small class="off-local-sub">The sections being offered this term. Upload the sheet, load it from a Google Sheets link, paste rows, or type them in.</small></h3></div>
           <details class="aisisbm">
             <summary>📋 copy classes from AISIS (bookmark button)<span class="off-owner"> · for whoever runs the sheet</span></summary>
@@ -656,7 +667,6 @@
   <main class="panel hidden" id="panel-pick">
     <section class="sec">
       <div class="sec-head">
-        <p class="eyebrow">the fun part</p>
         <h2>Pick your sections</h2>
         <p class="sub">Tap a section to add it. Clashes show before you commit.</p>
       </div>
@@ -671,7 +681,7 @@
               <button data-f="picked" aria-pressed="false">picked</button>
               <button data-f="starred" aria-pressed="false" aria-label="Starred only">★</button>
             </div>
-            <input type="text" id="search" placeholder="🔎 subject, prof, or a time like tue 2pm">
+            <input type="text" id="search" placeholder="🔎 subject, prof, or tue 2pm">
             <button class="btn small ghost" id="filtersBtn" aria-expanded="false" aria-controls="moreFilters">filters</button>
           </div>
           <div class="toolbar hidden" id="moreFilters">
@@ -690,15 +700,14 @@
   <main class="panel hidden" id="panel-week">
     <section class="sec">
       <div class="sec-head">
-        <p class="eyebrow">the big picture</p>
         <h2>The whole week</h2>
-        <p class="sub">Tap a name to show or hide them, a day to zoom in, or an empty spot to see what meets then.</p>
+        <p class="sub">Tap a day to zoom in, or an empty spot to see what meets then.</p>
       </div>
       <div class="whobar">
         <div class="whochips" id="weekWho"></div>
         <div class="row" style="margin-top:8px">
           <div class="seg" role="group" id="weekDays"></div>
-          <button class="btn small ghost" data-act="save-image-week">📸 save as image</button>
+          <button class="btn small ghost" data-act="save-image-week">📸 save week</button>
         </div>
       </div>
       <div id="draftBar"></div>
@@ -713,7 +722,6 @@
   <main class="panel hidden" id="panel-check">
     <section class="sec">
       <div class="sec-head">
-        <p class="eyebrow">enlistment day cheat sheet</p>
         <h2>Your checklist</h2>
         <p class="sub">Plan A, B and C for every IPS subject, so you know what to grab if a section fills up.</p>
       </div>
@@ -725,7 +733,7 @@
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<div class="modal hidden" id="modal"><div class="card tape" id="modalCard" role="dialog" aria-modal="true"></div></div>
+<div class="modal hidden" id="modal"><div class="card" id="modalCard" role="dialog" aria-modal="true"></div></div>
 
 <script>
 /* ======================= config ======================= */
@@ -1410,7 +1418,7 @@ const gridEnd = () => { let m = CONFIG.DAY_END * 60; (state.rows || []).forEach(
 function miniWeek(blocks, h = 260) {
   const S = CONFIG.DAY_START, E = gridEnd(), span = (E - S) * 60;
   const cols = DAY_SHORT.map(() => []);
-  blocks.forEach((b, n) => cols[b.day].push(`<div class="b${b.clash ? ' clash' : ''}${b.busy ? ' busy' : ''}" style="${b.style}; top:${(b.s - S * 60) / span * 100}%; height:${Math.max((b.e - b.s) / span * 100, 4)}%;${b.lanes > 1 ? ` left:${2 + b.lane * (96 / b.lanes)}%; right:auto; width:${96 / b.lanes - 3}%;` : ''} --d:${(n * .04).toFixed(2)}s">${esc(b.label || '')}</div>`));
+  blocks.forEach((b, n) => cols[b.day].push(`<div class="b${b.clash ? ' clash' : ''}${b.busy ? ' busy' : ''}${b.ghost ? ' ghost' + (b.fit ? '' : ' nofit') + (b.hot ? ' hot' : '') : ''}" style="${b.style}; top:${(b.s - S * 60) / span * 100}%; height:${Math.max((b.e - b.s) / span * 100, 4)}%;${b.lanes > 1 ? ` left:${2 + b.lane * (96 / b.lanes)}%; right:auto; width:${96 / b.lanes - 3}%;` : ''} --d:${(n * .04).toFixed(2)}s">${esc(b.label || '')}</div>`));
   let axis = '';
   for (let t = S + 2; t < E; t += 2) axis += `<span style="top:${(t - S) / (E - S) * 100}%">${((t + 11) % 12) + 1}</span>`;
   return `<div></div>${['M', 'T', 'W', 'Th', 'F', 'Sa'].map(d => `<div class="dh">${d}</div>`).join('')}
@@ -1479,8 +1487,9 @@ function renderPeople() {
       <div class="person-actions">
         ${courseIpsFor(p.prog) && p.ips && !p.ips.course ? `<button class="btn small soft" data-act="ips-course" data-i="${i}">🎓 use the ${esc(courseIpsFor(p.prog).course)} IPS</button>` : ''}
         <button class="btn small soft" data-act="ips-edit" data-i="${i}">✎ ${p.ips ? 'see & edit the whole IPS' : 'fill in the whole IPS'}</button>
-        <label class="filelink">📜 ${p.ips ? 'or load an IPS file' : 'or upload an IPS file'}<input type="file" data-ips="${i}" accept=".xlsx,.xls,.csv"></label>
-        ${connected() ? '' : `<button class="btn link" data-act="share" data-i="${i}">🔗 share this plan</button>`}
+        <button class="btn small ghost" data-act="aisis-import" data-i="${i}" title="already enlisted? paste your AISIS classes to pick the same sections">📋 from AISIS</button>
+        <label class="filelink">📜 IPS file<input type="file" data-ips="${i}" accept=".xlsx,.xls,.csv"></label>
+        ${connected() ? '' : `<button class="btn link" data-act="share" data-i="${i}">🔗 share</button>`}
       </div>
     </div>`).join('');
   $('#addPersonRow').classList.toggle('hidden', connected());
@@ -1557,11 +1566,54 @@ function renderHeroMini() {
 function setStatus(msg, err) { const el = $('#schedStatus'); el.textContent = msg; el.classList.toggle('err', !!err); }
 
 /* ----- pick ----- */
+/* the subject you're looking at in Pick: its open sections show on the little week as dashed boxes */
+let pickFocus = '', pickHover = -1;
+function ghostBlocks(a) {
+  const out = [], k = pickFocus;
+  if (!k) return out;
+  const idx = state.rows.map((r, i) => i).filter(i => norm(state.rows[i].subject) === k && !state.rows[i].on[a] && !blockedFor(i, a));
+  const by = new Map();
+  idx.forEach(i => C.parsed[i].forEach(ps => ps.days.forEach(d => {
+    const key = `${d}|${ps.s}|${ps.e}`, fit = !clashPreview(i, a).length;
+    const g = by.get(key) || { day: d, s: ps.s, e: ps.e, n: 0, fit: false, hot: false };
+    g.n++; g.fit = g.fit || fit; g.hot = g.hot || i === pickHover; by.set(key, g);
+  })));
+  by.forEach(g => out.push({ day: g.day, s: g.s, e: g.e, style: pv(a), label: `${g.n} open`, ghost: true, fit: g.fit, hot: g.hot }));
+  return out;
+}
+const stageBlocks = a => [...blocksFor(a, C.picks[a]), ...ghostBlocks(a)];
+function renderStageMini() {
+  const a = state.active, el = $('#stageMini'), sub = $('#stageSub'); if (!el || view !== 'pick') return;
+  el.innerHTML = miniWeek(stageBlocks(a), window.innerWidth < 900 ? 180 : 230);
+  if (sub) sub.innerHTML = stageSubText(a);
+}
+function stageSubText(a) {
+  const name = pickFocus && ghostBlocks(a).length && (state.rows.find(r => norm(r.subject) === pickFocus) || {}).subject;
+  return name ? `dashed = open times for <b>${esc(name)}</b>` : C.picks[a].length ? 'live preview · shaded = busy times' : 'picks show up here as you tap';
+}
+/* the subject nearest the top of the screen that still needs a section (or is open) */
+function updatePickFocus() {
+  if (view !== 'pick') return;
+  const top = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--tabh')) || 70) + 60;
+  const el = [...$$('#pickList .subj:not(.done)')].find(x => x.getBoundingClientRect().bottom > top + 40);
+  const k = el ? el.dataset.k || '' : '';
+  if (k !== pickFocus) { pickFocus = k; renderStageMini(); }
+}
+let focusRaf = 0;
+window.addEventListener('scroll', () => { if (view === 'pick' && !focusRaf) focusRaf = requestAnimationFrame(() => { focusRaf = 0; updatePickFocus(); }); }, { passive: true });
+document.addEventListener('pointerover', e => {
+  if (view !== 'pick') return;
+  const c = e.target.closest && e.target.closest('#pickList .sec-card[data-i]'), i = c ? +c.dataset.i : -1;
+  if (i === pickHover) return;
+  pickHover = i;
+  if (i >= 0) { const k = norm(state.rows[i].subject); if (k !== pickFocus) pickFocus = k; }
+  renderStageMini();
+});
 const openSubj = new Set();   // picked subjects the person opened again with "change" (folded ones show as one line)
 const subjId = k => 'subj-' + String(k).replace(/[^a-z0-9]+/g, '-');
 function renderPick() {
   whoChips($('#pickWho'), 'pick');
-  $('#pickWhoBar').classList.toggle('hidden', nP() < 2);   // alone: nothing to switch between (friends are added in Setup or the room menu)
+  $('#pickWhoBar').classList.toggle('hidden', nP() < 2); $('#panel-pick .studio').classList.toggle('nowho', nP() < 2);   // alone: nothing to switch between (friends are added in Setup or the room menu)
   const a = state.active, stage = $('#pickStage'), list = $('#pickList'), P = people()[a];
   const reqs = uniq(P.reqs);
   const pr = progressOf(a), fx = fixesFor(a);
@@ -1573,8 +1625,8 @@ function renderPick() {
     <div class="row"><button class="btn small ghost" data-act="hide-straight">I'm fine with it · hide this</button></div></div>`;
   else if (runs.length) alerts += `<p class="hint" style="margin:8px 0 0">😵 "classes straight" reminders are hidden. <button class="bk" data-act="show-straight">show them</button></p>`;
   stage.classList.toggle('folded', !state.stageOpen);
-  stage.innerHTML = `<div class="stage-head"><div><div class="stage-title">${N(a) === 'You' ? 'Your' : esc(N(a)) + '\'s'} week</div><div class="stage-sub">${C.picks[a].length ? 'live preview · shaded = busy times' : 'picks show up here as you tap'}</div></div><div class="row" style="margin:0; gap:8px; flex-wrap:nowrap"><button class="btn small ghost stage-toggle" data-act="stage-toggle" aria-expanded="${!!state.stageOpen}">${state.stageOpen ? 'hide week ▴' : 'show week ▾'}</button>${crest(a, 'lg')}</div></div>
-    <div class="mini">${miniWeek(blocksFor(a, C.picks[a]), window.innerWidth < 900 ? 180 : 230)}</div>
+  stage.innerHTML = `<div class="stage-head"><div><div class="stage-title">${N(a) === 'You' ? 'Your' : esc(N(a)) + '\'s'} week</div><div class="stage-sub" id="stageSub">${stageSubText(a)}</div></div><div class="row" style="margin:0; gap:8px; flex-wrap:nowrap"><button class="btn small ghost stage-toggle" data-act="stage-toggle" aria-expanded="${!!state.stageOpen}">${state.stageOpen ? 'hide week ▴' : 'show week ▾'}</button>${crest(a, 'lg')}</div></div>
+    <div class="mini" id="stageMini">${miniWeek(stageBlocks(a), window.innerWidth < 900 ? 180 : 230)}</div>
     <div class="stats">
       <div class="stat"><b>${pr.req ? `${pr.done}/${pr.req}` : C.picks[a].length}</b><span>${pr.req ? 'IPS subjects set' : 'sections picked'}</span></div>
       <div class="stat"><b style="color:${fx.clashing ? 'var(--bad)' : 'inherit'}">${fx.clashing}</b><span>clashes</span></div>
@@ -1583,7 +1635,7 @@ function renderPick() {
     ${alerts && canEditQ(a) ? `<div class="alerts">${alerts}</div>` : ''}
     ${canEditQ(a) ? `<div class="drafts">💾 ${P.drafts.some(draftHere) ? 'drafts:' : ''} ${P.drafts.map((d, k) => !draftHere(d) ? '' : `<span class="dchip"><button data-act="load-draft" data-d="${k}" title="load this draft">${esc(d.name)}</button><button data-act="del-draft" data-d="${k}" aria-label="delete draft">✕</button></span>`).join('')}
       <button class="btn small ghost" data-act="save-draft">save as draft</button></div>` : `<p class="viewing">👀 You're viewing ${esc(N(a))}'s plan. Only ${esc(N(a))} can change it.</p>`}
-    <div class="row stage-share">${connected() ? (SY().room ? `<button class="btn small" data-act="invite">👥 invite</button>` : `<button class="btn small" data-act="add-person-go">👥 compare with friends</button>`) : `<button class="btn small" data-act="share" data-i="${a}">🔗 share plan</button>`}<button class="btn small ghost" data-act="save-image" data-i="${a}">📸 save image</button></div>`;
+    <div class="row stage-share">${connected() ? (SY().room ? `<button class="btn small" data-act="invite">👥 invite</button>` : `<button class="btn small" data-act="add-person-go">👥 compare with friends</button>`) : `<button class="btn small" data-act="share" data-i="${a}">🔗 share plan</button>`}<button class="btn small ghost" data-act="save-image" data-i="${a}">📸 save week</button>${canEditQ(a) ? `<button class="btn small ghost" data-act="aisis-import" data-i="${a}">📋 from AISIS</button>` : ''}</div>`;
   if (!state.rows.length) { list.innerHTML = noClasses(); return; }
 
   let f = state.pickFilter;
@@ -1658,7 +1710,7 @@ function renderPick() {
     }
     const bks = backupList(a, subj);
     const fold = st.st === 'ready' && mine.length && !q ? `<button class="bk" data-act="subj-fold" data-k="${esc(k)}">fold ▴</button>` : '';
-    html += `<div class="subj rv" id="${k ? subjId(k) : ''}" style="--d:${Math.min(n++ * .04, .4)}s"><div class="subj-head"><h4>${esc(subj)}</h4><span class="row" style="margin:0; gap:8px">${tag}${nP() > 1 && needers.length ? `<span class="needers">needed by ${needers.map(i => crest(i, 'sm')).join('')}</span>` : ''}${pill}${fold}</span></div><div class="secs">`;
+    html += `<div class="subj rv" id="${k ? subjId(k) : ''}" data-k="${esc(k || '')}" style="--d:${Math.min(n++ * .04, .4)}s"><div class="subj-head"><h4>${esc(subj)}</h4><span class="row" style="margin:0; gap:8px">${tag}${nP() > 1 && needers.length ? `<span class="needers">needed by ${needers.map(i => crest(i, 'sm')).join('')}</span>` : ''}${pill}${fold}</span></div><div class="secs">`;
     if (!g) html += `<div class="sec-card" style="cursor:default"><span class="flag warn">not in the class offerings yet</span></div>`;
     idx.forEach(i => { html += secCard(i, a, bks); });
     html += '</div>';
@@ -1670,6 +1722,7 @@ function renderPick() {
   });
   // the subjects at a glance, to jump to one (only for "my subjects", where the list is the IPS)
   const jb = f === 'need' && !q && jumps.length > 3 ? `<nav class="jumpbar" aria-label="Jump to a subject"><span class="cnt">${jumps.filter(j => j.st === 'ready').length}/${jumps.length}</span>${jumps.map(j => `<button data-act="jump" data-k="${esc(subjId(j.k))}" class="${j.st === 'ready' ? 'ok' : j.st === 'conflict' ? 'bad' : ''}">${esc(j.name)}</button>`).join('')}</nav>` : '';
+  requestAnimationFrame(updatePickFocus);
   list.innerHTML = html ? jb + html : emptyBox(f === 'starred' ? '☆' : '🔍', f === 'picked' ? 'Nothing picked yet' : f === 'starred' ? 'No favorites yet' : 'No matches', f === 'picked' ? 'Tap sections in "all" to add them.' : f === 'starred' ? 'Tap ⋯ on a section, then ★ star it, to keep your favorites here.' : 'Try a different search.');
 }
 /* ----- who a section is for: the "For" column ("AB MEC 3; BS ME 2; some BS LEARN") vs each person's program & year ----- */
@@ -1801,7 +1854,7 @@ function scoreOf(set, p) {
 }
 /* ----- week ----- */
 function renderWeek() {
-  whoChips($('#weekWho'), 'week');
+  whoChips($('#weekWho'), 'week'); $('#weekWho').classList.toggle('hidden', nP() < 2);   // alone: no one to show or hide
   $('#roomFeed').innerHTML = feedCard(); markFeedSeen();   // the room's "what's new" and 💌 requests
   const grid = $('#weekGrid');
   if (state.weekDay === null || state.weekDay === undefined) state.weekDay = window.innerWidth < 640 ? Math.min(Math.max(new Date().getDay() - 1, 0), 5) : -1;
@@ -2139,7 +2192,7 @@ async function importCode(raw) {
 }
 
 /* ======================= image export ======================= */
-async function saveImage(list) {
+async function saveImage(list, opts = {}) {
   const L = list.map(p => ({ p, color: p, label: N(p), set: C.picks[p] }));
   const blocks = weekBlocks(L).flat();
   if (!blocks.some(b => !b.busy)) return toast('Nothing to show yet. Pick some classes first.');
@@ -2151,8 +2204,8 @@ async function saveImage(list) {
                    : { bg: '#f6f2e9', paper: '#fffdf8', ink: '#24203a', muted: '#6b6683', line: '#e4dccb', dot: 'rgba(91,75,183,.12)', acc: '#5b4bb7' };
   // each person gets a lane wide enough for names and rooms; the photo grows to fit
   const lanes = L.length, headH = lanes > 1 ? 74 : 50;
-  const pad = 48, axisW = 70, top = 150, hourH = 64, H = top + headH + (E - S) * hourH + 90;
-  const W = Math.max(1240, Math.round(pad * 2 + axisW + 14 + days * Math.max(190, lanes * 165)));
+  const pad = 48, axisW = 70, top = 150, hourH = opts.phone ? 80 : 64, H = top + headH + (E - S) * hourH + 90;
+  const W = opts.phone ? Math.round(pad * 2 + axisW + 14 + days * Math.max(120, lanes * 110)) : Math.max(1240, Math.round(pad * 2 + axisW + 14 + days * Math.max(190, lanes * 165)));
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const g = cv.getContext('2d');
   g.fillStyle = col.bg; g.fillRect(0, 0, W, H);
@@ -2195,14 +2248,124 @@ async function saveImage(list) {
     g.restore();
   });
   g.font = '700 24px Caveat, cursive'; g.fillStyle = col.muted; g.fillText('made with Enlistment Hub ✎', pad, H - 30);
-  cv.toBlob(async blob => {
-    const name = `${title.replace(/[^\w]+/g, '-').toLowerCase()}.png`;
+  let out = cv;
+  if (opts.phone) {   // phone wallpaper: the week sits below the lock-screen clock, on the same dotted paper
+    const PW = 1290, PH = 2796, ph = document.createElement('canvas'); ph.width = PW; ph.height = PH;
+    const q = ph.getContext('2d');
+    q.fillStyle = col.bg; q.fillRect(0, 0, PW, PH);
+    q.fillStyle = col.dot; for (let x = 13; x < PW; x += 26) for (let y = 13; y < PH; y += 26) { q.beginPath(); q.arc(x, y, 1.6, 0, 7); q.fill(); }
+    const sc = Math.min((PW - 50) / W, (PH - 780) / H), dw = W * sc, dh = H * sc;
+    q.drawImage(cv, (PW - dw) / 2, 700 + (PH - 780 - dh) / 2, dw, dh);   // below the lock-screen clock
+    out = ph;
+  }
+  out.toBlob(async blob => {
+    const name = `${title.replace(/[^\w]+/g, '-').toLowerCase()}${opts.phone ? '-wallpaper' : ''}.png`;
     const file = new File([blob], name, { type: 'image/png' });
     if (navigator.canShare && navigator.canShare({ files: [file] }) && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) { try { await navigator.share({ files: [file], title }); return; } catch (e) { if (e.name === 'AbortError') return; } }
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
     toast('image saved 📸');
   }, 'image/png');
+}
+
+
+/* ----- save your week: picture, phone wallpaper, or your calendar ----- */
+async function exportMenu(list) {
+  const one = list.length === 1 ? list[0] : (canEditQ(myIdx()) ? Math.max(0, myIdx()) : list[0]);
+  const b = (v, t, sub) => `<button class="btn small ghost exp-opt" data-choice="${v}"><b>${t}</b><span>${sub}</span></button>`;
+  const res = await openModal(`<h3>Save ${list.length > 1 ? 'the' : N(list[0]) === 'You' ? 'your' : esc(N(list[0])) + '\'s'} week</h3>
+    <div class="exp-grid">
+      ${b('img', '📸 Picture', 'the week as an image, to share')}
+      ${b('phone', '📱 Phone wallpaper', 'sized for your lock screen')}
+      ${b('cal', '📅 Add to calendar', `${list.length > 1 ? esc(N(one) === 'You' ? 'your' : N(one) + '\'s') + ' classes' : 'every class'}, repeating weekly`)}
+    </div>
+    <div class="row"><button class="btn small ghost" data-choice="">close</button></div>`);
+  const c = res && res.choice;
+  if (c === 'img') return saveImage(list);
+  if (c === 'phone') return saveImage(list, { phone: true });
+  if (c === 'cal') return calendarFile(one);
+}
+const ymd = d => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+const icsHm = m => `${String(Math.floor(m / 60)).padStart(2, '0')}${String(m % 60).padStart(2, '0')}00`;
+const icsText = s => String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+async function calendarFile(p) {
+  const set = C.picks[p];
+  if (!set.length) return toast('Nothing to add yet. Pick some classes first.');
+  state.calDates = state.calDates || {};
+  const tab = state.sheetName || SY().tab || 'term', saved = state.calDates[tab] || {};
+  const res = await openModal(`<h3>📅 Add to calendar</h3><p>Your classes repeat every week between these dates. Check the school calendar for the exact first and last day of classes.</p>
+    <div class="grid2"><div><label class="field">First day of classes</label><input type="date" data-field="from" value="${esc(saved.from || '')}"></div>
+      <div><label class="field">Last day of classes</label><input type="date" data-field="to" value="${esc(saved.to || '')}"></div></div>
+    <p class="hint">You'll get a calendar file. Open it and your phone or Google Calendar asks where to add the classes.</p>
+    <div class="row"><button class="btn small" data-choice="ok">make the calendar file</button><button class="btn small ghost" data-choice="">cancel</button></div>`);
+  if (!res || !res.choice) return;
+  const from = res.from ? new Date(res.from + 'T00:00:00') : null, to = res.to ? new Date(res.to + 'T00:00:00') : null;
+  if (!from || !to || isNaN(from) || isNaN(to) || to < from) return toast('Choose both dates, with the last day after the first.');
+  state.calDates[tab] = { from: res.from, to: res.to }; persist();
+  const DAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA'], stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+  const ev = [];
+  set.forEach(i => {
+    const r = state.rows[i];
+    C.parsed[i].forEach((ps, k) => {
+      if (!ps.days.length) return;
+      const first = new Date(from);   // the first meeting on or after the first day
+      while (!ps.days.includes((first.getDay() + 6) % 7)) first.setDate(first.getDate() + 1);
+      if (first > to) return;
+      ev.push(['BEGIN:VEVENT', `UID:${icsText((r.subject + '-' + r.section + '-' + k).replace(/\s+/g, ''))}-${ymd(from)}@enlistment-hub`, `DTSTAMP:${stamp}`,
+        `DTSTART;TZID=Asia/Manila:${ymd(first)}T${icsHm(ps.s)}`, `DTEND;TZID=Asia/Manila:${ymd(first)}T${icsHm(ps.e)}`,
+        `RRULE:FREQ=WEEKLY;BYDAY=${ps.days.map(d => DAYS[d]).join(',')};UNTIL=${ymd(to)}T155959Z`,
+        `SUMMARY:${icsText(`${r.subject} ${r.section}`)}`, r.room ? `LOCATION:${icsText(r.room)}` : '', r.instructor ? `DESCRIPTION:${icsText(r.instructor)}` : '', 'END:VEVENT'].filter(Boolean).join('\r\n'));
+    });
+  });
+  if (!ev.length) return toast('None of the classes meet between those dates.');
+  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Enlistment Hub//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', `X-WR-CALNAME:${icsText(tab)}`,
+    'BEGIN:VTIMEZONE', 'TZID:Asia/Manila', 'BEGIN:STANDARD', 'DTSTART:19700101T000000', 'TZOFFSETFROM:+0800', 'TZOFFSETTO:+0800', 'TZNAME:PHT', 'END:STANDARD', 'END:VTIMEZONE',
+    ...ev, 'END:VCALENDAR'].join('\r\n') + '\r\n';
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }));
+  a.download = `${tab.replace(/[^\w]+/g, '-').toLowerCase()}-classes.ics`; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast(`📅 ${set.length} classes in a calendar file · open it to add them`);
+}
+
+/* ----- your enlisted classes from AISIS: paste the table, get the same picks here ----- */
+function parseAisisSummary(text, rows) {
+  const bySubj = new Map();
+  rows.forEach((r, i) => { const k = norm(r.subject); if (!bySubj.has(k)) bySubj.set(k, []); bySubj.get(k).push(i); });
+  const keys = [...bySubj.keys()].sort((a, b) => b.length - a.length);
+  const found = [], missing = [];
+  String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean).forEach(line => {
+    const cells = line.split('\t').map(x => x.trim());
+    const code = norm((cells[0] || line).replace(/\s*\([^)]*\)/g, ''));   // "NSTP 12(CWTS)" → "nstp 12"
+    const flat = norm(line.replace(/\s*\([^)]*\)/, ''));
+    const k = bySubj.has(code) ? code : keys.find(x => flat.startsWith(x + ' '));
+    if (!k) { if (/\d{4}\s*-\s*\d{4}/.test(line)) missing.push(trunc(cells.length > 3 ? `${cells[0]} ${cells[3]}` : line, 40)); return; }   // a class we don't have; headings are skipped
+    const idx = bySubj.get(k);
+    let hit = cells.length > 4 ? idx.filter(i => norm(rows[i].section) === norm(cells[3])) : [];
+    if (!hit.length) {   // no tabs: look for a section name among the words, then let the time decide
+      const toks = new Set(flat.slice(k.length).split(/[\s\/]+/).filter(Boolean));
+      hit = idx.filter(i => toks.has(norm(rows[i].section)));
+      const times = (line.match(/\d{4}\s*-\s*\d{4}/g) || []).map(t => t.replace(/\s/g, ''));
+      if (hit.length > 1 && times.length) { const t = hit.filter(i => times.some(x => String(rows[i].time).replace(/\s/g, '').includes(x))); if (t.length) hit = t; }
+    }
+    if (hit.length === 1 || (hit.length > 1 && hit.every(i => norm(rows[i].section) === norm(rows[hit[0]].section)))) found.push(hit[0]);
+    else missing.push(trunc(cells.length > 3 ? `${cells[0]} ${cells[3]}` : line, 40));
+  });
+  return { found: uniq(found), missing };
+}
+async function importAisis(i) {
+  if (!state.rows.length) return toast('Load the class offerings first.');
+  const res = await openModal(`<h3>📋 Bring in your AISIS classes</h3>
+    <p>On AISIS, open your enlisted (or pre-enlisted) classes, select the whole table, copy it, and paste it here. Each class becomes a pick for this tab.</p>
+    <textarea data-field="text" spellcheck="false" style="min-height:160px; font-size:13px" placeholder="ECON 113&#9;3&#9;ECONOMICS OF MONEY AND BANKING&#9;E&#9;DUMLAO, LUIS F.&#9;M-TH 1400-1530 / K-301&#10;…"></textarea>
+    <div class="row"><button class="btn small" data-choice="replace">replace my picks</button><button class="btn small ghost" data-choice="add">add to my picks</button><button class="btn small ghost" data-choice="">cancel</button></div>`, { wide: true });
+  if (!res || !res.choice) return;
+  const { found, missing } = parseAisisSummary(res.text, state.rows);
+  if (!found.length) return toast(missing.length ? `None of those classes are in "${state.sheetName || 'this tab'}". Is the right term open?` : 'Nothing to read there. Copy the whole table from AISIS.');
+  const snap = snapshot(), msgs = [];
+  if (res.choice === 'replace') state.rows.forEach((r, k) => { if (r.on[i]) r.on[i] = false; });
+  found.forEach(k => setPick(k, i, true, msgs));
+  save(); render();
+  undoable(`📋 ${found.length} class${found.length === 1 ? '' : 'es'} from AISIS${missing.length ? ` · not in this tab: ${missing.slice(0, 3).join(', ')}${missing.length > 3 ? '…' : ''}` : ''}`, snap);
 }
 
 /* ======================= loading offerings ======================= */
@@ -3593,8 +3756,9 @@ document.addEventListener('click', async e => {
       if (res && res.choice === 'go' && (res.code || '').trim()) setTimeout(() => importCode(res.code), 0);
       return;
     }
-    case 'save-image': return saveImage([i]);
-    case 'save-image-week': return saveImage(people().map((_, p) => state.weekShow[p] ? p : -1).filter(p => p >= 0));
+    case 'save-image': return exportMenu([i]);
+    case 'save-image-week': return exportMenu(people().map((_, p) => state.weekShow[p] ? p : -1).filter(p => p >= 0));
+    case 'aisis-import': return canEdit(i) && importAisis(i);
     case 'copy-sheet': {
       const text = cheatSheet(i);
       try { await navigator.clipboard.writeText(text); toast('copied! paste it into your notes 📋'); }
